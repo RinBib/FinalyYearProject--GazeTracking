@@ -1,12 +1,38 @@
 import cv2
 from gaze_tracking import GazeTracking
 from gaze_tracking.fixation import FixationDetector
+import csv
+from datetime import datetime
 
 # Initialize GazeTracking and FixationDetector
 gaze = GazeTracking()
 fixation_detector = FixationDetector(threshold=10, duration=0.5)
 
+# Initialize CSV logging
+log_file = "gaze_data_task1.csv"
+with open(log_file, mode="w", newline="") as file:
+    writer = csv.writer(file)
+    writer.writerow(["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
+                     "Right_Pupil_X", "Right_Pupil_Y", "Fixation_Detected",
+                     "Fixation_X", "Fixation_Y"])
+
+
+def log_data(left_pupil, right_pupil, fixation_detected, fixation_position):
+    """Log gaze data to the CSV file."""
+    with open(log_file, mode="a", newline="") as file:
+        writer = csv.writer(file)
+        # Explicit unpacking for compatibility
+        left_x, left_y = left_pupil if left_pupil else (None, None)
+        right_x, right_y = right_pupil if right_pupil else (None, None)
+        fix_x, fix_y = fixation_position if fixation_position else (None, None)
+        writer.writerow([datetime.now(), left_x, left_y, right_x, right_y, fixation_detected, fix_x, fix_y])
+
+
+# Start capturing video
 webcam = cv2.VideoCapture(0)
+
+print("Starting Task 1: Basic Gaze Tracking without Additional Stimuli")
+print("Press 'q' to quit.")
 
 while True:
     # Read a frame from the webcam
@@ -26,6 +52,9 @@ while True:
 
     # Detect fixation
     fixation_detected, fixation_position = fixation_detector.detect_fixation(current_position)
+
+    # Log data
+    log_data(left_pupil, right_pupil, fixation_detected, fixation_position)
 
     # Add text overlay to the frame
     frame = gaze.annotated_frame()
@@ -68,10 +97,11 @@ while True:
         y_offset += 20  # Increment y-coordinate for the next line
 
     # Display the annotated frame
-    cv2.imshow("Frame", frame)
+    cv2.imshow("Task 1: Basic Gaze Tracking", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 webcam.release()
 cv2.destroyAllWindows()
+print("Task 1 Completed. Data saved to 'gaze_data_task1.csv'.")
