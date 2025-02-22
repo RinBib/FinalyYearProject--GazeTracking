@@ -21,21 +21,24 @@ gaze = GazeTracking()
 DPI = 96  
 SCREEN_DISTANCE_MM = 600  
 PIXEL_TO_MM = 25.4 / DPI  
-
+ 
+# Make csv
 def initialize_csv(log_file, headers):
-    """Create the CSV file with headers."""
+    
     with open(log_file, mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(headers)
 
+# Log data
 def log_data(log_file, data):
-    """Log speed data to the CSV file."""
+    
     with open(log_file, mode="a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(data)
 
+# Find pupils
 def pupils_located():
-    """Check if pupils are detected before tracking."""
+    
     try:
         int(gaze.eye_left.pupil.x)
         int(gaze.eye_left.pupil.y)
@@ -45,6 +48,7 @@ def pupils_located():
     except Exception:
         return False
 
+# Calculate speed
 def calculate_speed(prev_point, curr_point, prev_time, curr_time):
     """Calculate movement speed in pixels/sec, mm/sec, and degrees/sec."""
     distance_px = np.sqrt((curr_point[0] - prev_point[0])**2 + (curr_point[1] - prev_point[1])**2)
@@ -62,7 +66,6 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
     return distance_px / time_diff, speed_mm_sec, speed_deg_sec  
 
 def get_next_filename(patient_name):
-    """Find the next sequential file name for the patient session."""
     folder_path = f"deterministic_model_test/{patient_name}"
     os.makedirs(folder_path, exist_ok=True)  # Ensure folder exists
 
@@ -73,7 +76,6 @@ def get_next_filename(patient_name):
 
 
 def track_eye_speed(patient_name, tracking_duration=10):
-    """Run a 10-second test to measure eye movement speed with a moving shape."""
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec"])
@@ -147,12 +149,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
     print(f"Speed test completed. Data saved to {log_file}")
 
 
-
-
-    #check_weekly_prediction(patient_name)
-
 def check_weekly_prediction(patient_name):
-    """After 7 days, generate a prediction based on speed trends."""
     folder_path = f"deterministic_model_test/{patient_name}"
     files = sorted([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")])
 
