@@ -239,7 +239,12 @@ if __name__ == "__main__":
             break
         else:
             print("Error: Patient name cannot be empty.")
-    # Run
-    track_eye_speed(patient_name, tracking_duration=10)
+
+   # Run tracking for the current session
+track_eye_speed(patient_name, tracking_duration=10)
+
+# Ensure at least 7 sessions before making grapgh
+if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
     plot_weekly_speed_trend(patient_name)
+
     
