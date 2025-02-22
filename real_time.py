@@ -9,7 +9,7 @@ import math
 import pandas as pd  
 import matplotlib.pyplot as plt  
 
-# Ensure Python can find 'gaze_tracking'
+# Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from gaze_tracking import GazeTracking
@@ -64,7 +64,7 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
 def get_next_filename(patient_name):
     """Find the next sequential file name for the patient session."""
     folder_path = f"deterministic_model_test/{patient_name}"
-    os.makedirs(folder_path, exist_ok=True)  # ✅ Ensure folder exists
+    os.makedirs(folder_path, exist_ok=True)  # Ensure folder exists
 
     existing_files = [f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")]
     next_number = len(existing_files) + 1  
