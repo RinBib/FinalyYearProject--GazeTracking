@@ -245,6 +245,7 @@ track_eye_speed(patient_name, tracking_duration=10)
 
 # Ensure at least 7 sessions before making grapgh
 if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
+    check_weekly_prediction(patient_name)
     plot_weekly_speed_trend(patient_name)
 
     
