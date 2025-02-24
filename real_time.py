@@ -52,7 +52,9 @@ def pupils_located():
 def calculate_speed(prev_point, curr_point, prev_time, curr_time):
     """Calculate movement speed in pixels/sec, mm/sec, and degrees/sec."""
     distance_px = np.sqrt((curr_point[0] - prev_point[0])**2 + (curr_point[1] - prev_point[1])**2)
-    time_diff = curr_time - prev_time
+    #time_diff = curr_time - prev_time
+    time_diff = (curr_time - prev_time) / 1000  # Convert ms to seconds
+
     if time_diff <= 0:
         return 0, 0, 0  # Avoid division by zero
 
@@ -62,8 +64,10 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
 
     # Convert mm to degrees of visual angle
     speed_deg_sec = 2 * math.degrees(math.atan(distance_mm / (2 * SCREEN_DISTANCE_MM))) / time_diff
+    print(f"Distance in mm: {distance_mm}, Time diff: {time_diff}, Speed in mm/sec: {speed_mm_sec}")
 
     return distance_px / time_diff, speed_mm_sec, speed_deg_sec  
+
 
 def get_next_filename(patient_name):
     folder_path = f"deterministic_model_test/{patient_name}"
@@ -219,6 +223,7 @@ def plot_weekly_speed_trend(patient_name):
 
 
 if __name__ == "__main__":
+   
     while True:
         patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
 
@@ -247,5 +252,7 @@ track_eye_speed(patient_name, tracking_duration=10)
 if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
     check_weekly_prediction(patient_name)
     plot_weekly_speed_trend(patient_name)
+
+
 
     
