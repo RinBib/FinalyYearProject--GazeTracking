@@ -11,19 +11,19 @@ gaze = GazeTracking()
 fixation_detector = FixationDetector(threshold=10, duration=0.5)
 
 def initialize_csv(log_file, headers):
-    """Initialize the CSV log file."""
+    
     with open(log_file, mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(headers)
 
 def log_data(log_file, data):
-    """Log gaze data to the CSV file."""
+    
     with open(log_file, mode="a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(data)
 
 def generate_filename(participant_name, task_number):
-    """Generate a unique filename for each participant and task."""
+    
     filename = f"{participant_name}_Task{task_number}.csv"
     
     # Ensure file doesn't get overwritten
@@ -35,7 +35,7 @@ def generate_filename(participant_name, task_number):
     return filename
 
 def task_1_basic_tracking(participant_name):
-    """Task 1: Basic Gaze Tracking without Additional Stimuli"""
+    
     log_file = generate_filename(participant_name, 1)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Fixation_Detected",

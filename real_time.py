@@ -50,7 +50,7 @@ def pupils_located():
 
 # Calculate speed
 def calculate_speed(prev_point, curr_point, prev_time, curr_time):
-    """Calculate movement speed in pixels/sec, mm/sec, and degrees/sec."""
+    
     distance_px = np.sqrt((curr_point[0] - prev_point[0])**2 + (curr_point[1] - prev_point[1])**2)
     #time_diff = curr_time - prev_time
     time_diff = (curr_time - prev_time) / 1000  # Convert ms to seconds
@@ -96,7 +96,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
     prev_x, prev_y, prev_timestamp = None, None, None
     start_time = time.time()  
 
-    # Define initial shape movement properties
+    # Define initial shape movement 
     shape_x, shape_y = 320, 240  # Start in center
     shape_radius = 20
 
