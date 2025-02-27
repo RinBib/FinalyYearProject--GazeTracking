@@ -179,7 +179,6 @@ def check_weekly_prediction(patient_name):
     
     
 def plot_weekly_speed_trend(patient_name):
-    """Generate a scatter plot of speed trends over 7 days."""
     folder_path = f"deterministic_model_test/{patient_name}"
     
     # Ensure folder exists
