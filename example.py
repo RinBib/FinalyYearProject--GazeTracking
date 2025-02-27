@@ -82,7 +82,7 @@ def task_1_basic_tracking(participant_name):
     print(f"Task 1 for {participant_name} completed. Data saved to {log_file}")
 
 def task_2_controlled_stimulus(participant_name):
-    """Task 2: Controlled Stimulus Tracking"""
+   
     log_file = generate_filename(participant_name, 2)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Fixation_Detected",
