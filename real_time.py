@@ -8,6 +8,7 @@ import time
 import math  
 import pandas as pd  
 import matplotlib.pyplot as plt  
+import dlib
 
 # Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -16,6 +17,12 @@ from gaze_tracking import GazeTracking
 
 # Initialize GazeTracking
 gaze = GazeTracking()
+# face detection
+face_detector = dlib.get_frontal_face_detector()
+
+FRAME_WIDTH, FRAME_HEIGHT = 640, 480
+# (x1,y1) (x2,y2)
+SAFE_ZONE = (200, 100, 440, 380) 
 
 # Constants for real-world conversion
 DPI = 96  
@@ -35,18 +42,43 @@ def log_data(log_file, data):
     with open(log_file, mode="a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(data)
+        
+def is_head_centered(face):
+    """Check if the detected face is within an oval safe zone."""
+    x, y, w, h = face.left(), face.top(), face.width(), face.height()
+    x_center, y_center = x + w // 2, y + h // 2
 
-# Find pupils
+    # Define oval center and axes (adjust as needed)
+    oval_center_x, oval_center_y = 320, 240  # Center of screen
+    oval_axis_x, oval_axis_y = 120, 150  # Horizontal and vertical radii
+
+    # Equation of an ellipse: ((x-h)/a)^2 + ((y-k)/b)^2 <= 1
+    normalized_x = ((x_center - oval_center_x) ** 2) / (oval_axis_x ** 2)
+    normalized_y = ((y_center - oval_center_y) ** 2) / (oval_axis_y ** 2)
+
+    return (normalized_x + normalized_y) <= 1  # Returns True if inside the oval
+
+
+
+
+
+
+
 def pupils_located():
-    
     try:
-        int(gaze.eye_left.pupil.x)
-        int(gaze.eye_left.pupil.y)
-        int(gaze.eye_right.pupil.x)
-        int(gaze.eye_right.pupil.y)
-        return True
-    except Exception:
-        return False
+        if gaze.eye_left and gaze.eye_right:
+            int(gaze.eye_left.pupil.x)
+            int(gaze.eye_left.pupil.y)
+            int(gaze.eye_right.pupil.x)
+            int(gaze.eye_right.pupil.y)
+            return True
+    except Exception as e:
+        # Debugging message
+        print(f"DEBUG Pupil detection failed: {e}")  
+    return False
+
+
+
 
 # Calculate speed
 def calculate_speed(prev_point, curr_point, prev_time, curr_time):
@@ -79,78 +111,143 @@ def get_next_filename(patient_name):
     return f"{folder_path}/{patient_name}_speed_test_{next_number}.csv"
 
 
+
 def track_eye_speed(patient_name, tracking_duration=10):
+    """Tracks eye movement speed while ensuring head is positioned correctly."""
+    
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec"])
 
     webcam = cv2.VideoCapture(0)
-    time.sleep(2)  
+    time.sleep(2)  # Allow webcam to adjust
 
     if not webcam.isOpened():
         print("Error: Cannot access the webcam.")
         return
 
-    print(f"Running speed test for {patient_name}... Test will stop automatically after 10 seconds.")
+    print(f"Running speed test for {patient_name}... Test will stop automatically after {tracking_duration} seconds.")
 
     prev_x, prev_y, prev_timestamp = None, None, None
-    start_time = time.time()  
+    start_time = time.time()
+    paused_time = 0  # Track total paused time
+    last_pause_start = None  # Track when pause started
 
-    # Define initial shape movement 
+    # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
     shape_radius = 20
 
-    while time.time() - start_time < tracking_duration:  
-        _, frame = webcam.read()
-        gaze.refresh(frame)  
+    while True:
+        ret, frame = webcam.read()
+        if not ret:
+            break
 
-        # Update shape position (Moves left to right in a sinusoidal pattern)
-        time_elapsed = time.time() - start_time
+        # Convert frame to grayscale for face detection
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_detector(gray)
+
+        # Update moving shape position (sinusoidal movement)
+        time_elapsed = time.time() - start_time - paused_time
         shape_x = int(320 + 150 * np.sin(time_elapsed * 2))  # Moves left-right
         shape_y = int(240 + 50 * np.cos(time_elapsed * 2))  # Moves slightly up/down
 
-        # Overlay the moving shape (circle) on the video feed
-        frame = gaze.annotated_frame()  
-        cv2.circle(frame, (shape_x, shape_y), shape_radius, (0, 255, 255), -1)  # Yellow circle
+        # Draw the moving shape (yellow circle)
+        cv2.circle(frame, (shape_x, shape_y), shape_radius, (0, 255, 255), -1)
 
-        if pupils_located():
-            left_pupil = gaze.pupil_left_coords()
-            right_pupil = gaze.pupil_right_coords()
+        if faces:
+            face = faces[0]  # Use the first detected face
+            if is_head_centered(face):
+                cv2.putText(frame, "Head Position: OK", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            if left_pupil and right_pupil:
-                timestamp = datetime.now().timestamp() * 1000  
-                curr_x = (left_pupil[0] + right_pupil[0]) / 2
-                curr_y = (left_pupil[1] + right_pupil[1]) / 2
+                # Resume the timer if previously paused
+                if last_pause_start is not None:
+                    paused_time += time.time() - last_pause_start
+                    last_pause_start = None  # Reset pause tracker
 
-                if prev_x is not None and prev_y is not None:
-                    speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
-                        (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
-                    )
+                # Process gaze tracking when head is properly positioned
+                gaze.refresh(frame)
 
-                    log_data(log_file, [
-                        datetime.now(), *left_pupil, *right_pupil, speed_px_sec, speed_mm_sec, speed_deg_sec
-                    ])
+                if pupils_located():
+                    left_pupil = gaze.pupil_left_coords()
+                    right_pupil = gaze.pupil_right_coords()
 
-                    cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                    cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    if left_pupil and right_pupil:
+                        timestamp = datetime.now().timestamp() * 1000
+                        curr_x = (left_pupil[0] + right_pupil[0]) / 2
+                        curr_y = (left_pupil[1] + right_pupil[1]) / 2
 
-                prev_x, prev_y = curr_x, curr_y
-                prev_timestamp = timestamp
+                        # SPEED CALCULATION
+                        if prev_x is not None and prev_y is not None:
+                            speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
+                                (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
+                            )
 
-        remaining_time = int(tracking_duration - (time.time() - start_time))
-        cv2.putText(frame, f"Time Left: {remaining_time} sec", (50, 50),
+                            # DATA LOGGING
+                            log_data(log_file, [
+                                datetime.now(), *left_pupil, *right_pupil, speed_px_sec, speed_mm_sec, speed_deg_sec
+                            ])
+
+                            # VISUAL FEEDBACK
+                            cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+                        # Update previous position
+                        prev_x, prev_y = curr_x, curr_y
+                        prev_timestamp = timestamp
+
+            else:
+                # Start pause timer if head is not centered
+                if last_pause_start is None:
+                    last_pause_start = time.time()
+
+                # TURN SCREEN RED IF HEAD IS OUT OF POSITION
+                red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
+                frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
+
+                # Display warning message
+                cv2.putText(frame, "Adjust Head Position!", (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+
+        else:
+            # No face detected: Pause the timer and turn screen red
+            if last_pause_start is None:
+                last_pause_start = time.time()
+
+            red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
+            frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
+            cv2.putText(frame, "No Face Detected!", (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+
+        # Draw original oval safe zone
+        cv2.ellipse(frame, (320, 240), (120, 150), 0, 0, 360, (0, 255, 0), 2)
+
+        # TIME REMAINING DISPLAY (Pauses when face is out of position)
+        if last_pause_start is None:
+            elapsed_time = time.time() - start_time - paused_time
+        else:
+            elapsed_time = time.time() - start_time - paused_time - (time.time() - last_pause_start)
+
+        remaining_time = max(0, tracking_duration - elapsed_time)
+
+        cv2.putText(frame, f"Time Left: {int(remaining_time)} sec", (50, 150),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
         cv2.imshow("Eye Speed Tracking", frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):  
+        # Stop when time is up
+        if remaining_time <= 0:
+            break
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     webcam.release()
     cv2.destroyAllWindows()
     print(f"Speed test completed. Data saved to {log_file}")
+
+
+
+
 
 
 def check_weekly_prediction(patient_name):
