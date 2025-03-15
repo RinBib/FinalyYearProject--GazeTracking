@@ -1,0 +1,9 @@
+add frame of persons face for error check
+use own dataset and from web for ai model 
+add feature to import a dataset and get results
+bootstrap app
+
+
+for report:
+use graphs and charts
+compare ai model and algo model
