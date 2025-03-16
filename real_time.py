@@ -130,7 +130,6 @@ def get_next_filename(patient_name):
 
 
 
-
 def track_eye_speed(patient_name, tracking_duration=10):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
@@ -149,8 +148,8 @@ def track_eye_speed(patient_name, tracking_duration=10):
 
     prev_x, prev_y, prev_timestamp = None, None, None
     start_time = time.time()
-    paused_time = 0  # Track total paused time
-    last_pause_start = None  # Track when pause started
+    paused_time = 0  # Total paused time
+    last_pause_start = None  # When pause started
 
     # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
@@ -199,10 +198,10 @@ def track_eye_speed(patient_name, tracking_duration=10):
                                 (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
                             )
 
-                            if speed_mm_sec > 0:
-                                # If the timer was paused, resume it
+                            if speed_mm_sec is not None and speed_mm_sec > 0:
+                                # Resume timer if it was paused
                                 if last_pause_start is not None:
-                                    paused_time += time.time() - last_pause_start  # Add the paused duration
+                                    paused_time += time.time() - last_pause_start
                                     last_pause_start = None  # Reset pause tracker
                                     print("[DEBUG] Resuming timer - Movement detected.")
 
@@ -214,18 +213,28 @@ def track_eye_speed(patient_name, tracking_duration=10):
                                 if last_pause_start is None:
                                     last_pause_start = time.time()
                                     print("[DEBUG] Pausing timer - No movement detected.")
-
-                            # VISUAL FEEDBACK
-                            cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                            cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                        else:
+                            # If pupils not found, pause timer
+                            if last_pause_start is None:
+                                last_pause_start = time.time()
+                                print("[DEBUG] Pausing timer - No pupils detected.")
 
                         # Update previous position
                         prev_x, prev_y = curr_x, curr_y
                         prev_timestamp = timestamp
                     else:
-                        print("[WARNING] Skipping frame - Pupil coordinates are None.")
+                        # If pupils are None, also pause the timer
+                        if last_pause_start is None:
+                            last_pause_start = time.time()
+                            print("[DEBUG] Pausing timer - Eye tracking lost.")
+
+                # ✅ **Speed Display on UI**
+                if speed_mm_sec is not None and speed_mm_sec > 0:
+                    cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                else:
+                    cv2.putText(frame, "Speed: N/A", (50, 100),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)  # Red if speed is missing
 
             else:
                 # Start pause timer if head is not centered
@@ -249,16 +258,15 @@ def track_eye_speed(patient_name, tracking_duration=10):
         # Draw original oval safe zone
         cv2.ellipse(frame, (320, 240), (120, 150), 0, 0, 360, (0, 255, 0), 2)
 
+        # ✅ **Fixed Timer Display Update**
         if last_pause_start is not None:
-            # Timer is currently paused, don't count this time
-            elapsed_time = time.time() - start_time - paused_time - (time.time() - last_pause_start)
+            # Timer is paused, stop updating elapsed_time
+            remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time - (time.time() - last_pause_start)))
         else:
             # Timer is running normally
-            elapsed_time = time.time() - start_time - paused_time
+            remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time))
 
-
-        remaining_time = max(0, tracking_duration - elapsed_time)
-
+        # Ensure the timer updates correctly even when paused
         cv2.putText(frame, f"Time Left: {int(remaining_time)} sec", (50, 150),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
@@ -274,6 +282,9 @@ def track_eye_speed(patient_name, tracking_duration=10):
     webcam.release()
     cv2.destroyAllWindows()
     print(f"Speed test completed. Data saved to {log_file}")
+
+
+
 
 
 
