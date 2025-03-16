@@ -50,7 +50,7 @@ def is_head_centered(face):
 
     # Define oval center and axes (adjust as needed)
     oval_center_x, oval_center_y = 320, 240  # Center of screen
-    oval_axis_x, oval_axis_y = 120, 150  # Horizontal and vertical radii
+    oval_axis_x, oval_axis_y = 160, 180  # Horizontal and vertical radii
 
     # Equation of an ellipse: ((x-h)/a)^2 + ((y-k)/b)^2 <= 1
     normalized_x = ((x_center - oval_center_x) ** 2) / (oval_axis_x ** 2)
@@ -59,23 +59,40 @@ def is_head_centered(face):
     return (normalized_x + normalized_y) <= 1  # Returns True if inside the oval
 
 
-
-
-
-
-
 def pupils_located():
     try:
         if gaze.eye_left and gaze.eye_right:
-            int(gaze.eye_left.pupil.x)
-            int(gaze.eye_left.pupil.y)
-            int(gaze.eye_right.pupil.x)
-            int(gaze.eye_right.pupil.y)
-            return True
+            if gaze.eye_left.pupil and gaze.eye_right.pupil:
+                if gaze.eye_left.pupil.x is not None and gaze.eye_right.pupil.x is not None:
+                    print(f"[DEBUG] Left Pupil: ({gaze.eye_left.pupil.x}, {gaze.eye_left.pupil.y})")
+                    print(f"[DEBUG] Right Pupil: ({gaze.eye_right.pupil.x}, {gaze.eye_right.pupil.y})")
+                    return True
+                else:
+                    print("[WARNING] Pupils became None after moving.")
+            else:
+                print("[WARNING] Eye object exists, but pupils are missing.")
+        else:
+            print("[WARNING] Eye objects are None!")
     except Exception as e:
-        # Debugging message
-        print(f"DEBUG Pupil detection failed: {e}")  
+        print(f"[ERROR] Pupil detection failed: {e}")  
     return False
+
+
+
+
+
+#def pupils_located():
+    #try:
+        #if gaze.eye_left and gaze.eye_right:
+           # int(gaze.eye_left.pupil.x)
+          #  int(gaze.eye_left.pupil.y)
+          #  int(gaze.eye_right.pupil.x)
+         #   int(gaze.eye_right.pupil.y)
+       #     return True
+  #  except Exception as e:
+ #       # Debugging message
+#        print(f"DEBUG Pupil detection failed: {e}")  
+ #   return False
 
 
 
@@ -118,8 +135,16 @@ def track_eye_speed(patient_name, tracking_duration=10):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec"])
+   
 
     webcam = cv2.VideoCapture(0)
+    
+    # RES INCREASE
+    #webcam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    #webcam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    #webcam.set(cv2.CAP_PROP_FPS, 15)  # Reduce FPS to stabilize tracking
+    
+    
     time.sleep(2)  # Allow webcam to adjust
 
     if not webcam.isOpened():
@@ -166,36 +191,41 @@ def track_eye_speed(patient_name, tracking_duration=10):
 
                 # Process gaze tracking when head is properly positioned
                 gaze.refresh(frame)
+                # refresh
+                cv2.waitKey(1)
 
                 if pupils_located():
                     left_pupil = gaze.pupil_left_coords()
                     right_pupil = gaze.pupil_right_coords()
 
                     if left_pupil and right_pupil:
-                        timestamp = datetime.now().timestamp() * 1000
-                        curr_x = (left_pupil[0] + right_pupil[0]) / 2
-                        curr_y = (left_pupil[1] + right_pupil[1]) / 2
+                        if None not in left_pupil and None not in right_pupil:
+                            timestamp = datetime.now().timestamp() * 1000
+                            curr_x = (left_pupil[0] + right_pupil[0]) / 2
+                            curr_y = (left_pupil[1] + right_pupil[1]) / 2
 
-                        # SPEED CALCULATION
-                        if prev_x is not None and prev_y is not None:
-                            speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
-                                (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
-                            )
+                            # SPEED CALCULATION
+                            if prev_x is not None and prev_y is not None:
+                                speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
+                                    (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
+                                )
 
-                            # DATA LOGGING
-                            log_data(log_file, [
-                                datetime.now(), *left_pupil, *right_pupil, speed_px_sec, speed_mm_sec, speed_deg_sec
-                            ])
+                                # DATA LOGGING
+                                log_data(log_file, [
+                                    datetime.now(), *left_pupil, *right_pupil, speed_px_sec, speed_mm_sec, speed_deg_sec
+                                ])
 
-                            # VISUAL FEEDBACK
-                            cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                            cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                                # VISUAL FEEDBACK
+                                cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                                cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-                        # Update previous position
-                        prev_x, prev_y = curr_x, curr_y
-                        prev_timestamp = timestamp
+                            # Update previous position
+                            prev_x, prev_y = curr_x, curr_y
+                            prev_timestamp = timestamp
+                        else:
+                            print("warning debug skippng frame beacuse pupil coord becomes none")
 
             else:
                 # Start pause timer if head is not centered
