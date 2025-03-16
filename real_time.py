@@ -44,7 +44,7 @@ def log_data(log_file, data):
         writer.writerow(data)
         
 def is_head_centered(face):
-    """Check if the detected face is within an oval safe zone."""
+    
     x, y, w, h = face.left(), face.top(), face.width(), face.height()
     x_center, y_center = x + w // 2, y + h // 2
 
@@ -113,7 +113,7 @@ def get_next_filename(patient_name):
 
 
 def track_eye_speed(patient_name, tracking_duration=10):
-    """Tracks eye movement speed while ensuring head is positioned correctly."""
+    
     
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
