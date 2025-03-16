@@ -130,22 +130,14 @@ def get_next_filename(patient_name):
 
 
 def track_eye_speed(patient_name, tracking_duration=10):
-    
-    
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec"])
-   
 
     webcam = cv2.VideoCapture(0)
-    
-    # RES INCREASE
-    #webcam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    #webcam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    #webcam.set(cv2.CAP_PROP_FPS, 15)  # Reduce FPS to stabilize tracking
-    
-    
-    time.sleep(2)  # Allow webcam to adjust
+
+    # Allow webcam to adjust
+    time.sleep(2)
 
     if not webcam.isOpened():
         print("Error: Cannot access the webcam.")
@@ -172,9 +164,11 @@ def track_eye_speed(patient_name, tracking_duration=10):
         faces = face_detector(gray)
 
         # Update moving shape position (sinusoidal movement)
-        time_elapsed = time.time() - start_time - paused_time
-        shape_x = int(320 + 150 * np.sin(time_elapsed * 2))  # Moves left-right
-        shape_y = int(240 + 50 * np.cos(time_elapsed * 2))  # Moves slightly up/down
+        absolute_time_elapsed = time.time() - start_time  # Continuous time (ignores pauses)
+
+        shape_x = int(320 + 150 * np.sin(absolute_time_elapsed * 2))  # Smooth horizontal movement
+        shape_y = int(240 + 50 * np.cos(absolute_time_elapsed * 2))   # Smooth vertical movement
+
 
         # Draw the moving shape (yellow circle)
         cv2.circle(frame, (shape_x, shape_y), shape_radius, (0, 255, 255), -1)
@@ -184,48 +178,52 @@ def track_eye_speed(patient_name, tracking_duration=10):
             if is_head_centered(face):
                 cv2.putText(frame, "Head Position: OK", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-                # Resume the timer if previously paused
-                if last_pause_start is not None:
-                    paused_time += time.time() - last_pause_start
-                    last_pause_start = None  # Reset pause tracker
-
                 # Process gaze tracking when head is properly positioned
                 gaze.refresh(frame)
-                # refresh
                 cv2.waitKey(1)
 
                 if pupils_located():
                     left_pupil = gaze.pupil_left_coords()
                     right_pupil = gaze.pupil_right_coords()
 
-                    if left_pupil and right_pupil:
-                        if None not in left_pupil and None not in right_pupil:
-                            timestamp = datetime.now().timestamp() * 1000
-                            curr_x = (left_pupil[0] + right_pupil[0]) / 2
-                            curr_y = (left_pupil[1] + right_pupil[1]) / 2
+                    if left_pupil and right_pupil and None not in left_pupil and None not in right_pupil:
+                        timestamp = datetime.now().timestamp() * 1000
+                        curr_x = (left_pupil[0] + right_pupil[0]) / 2
+                        curr_y = (left_pupil[1] + right_pupil[1]) / 2
 
-                            # SPEED CALCULATION
-                            if prev_x is not None and prev_y is not None:
-                                speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
-                                    (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
-                                )
+                        # SPEED CALCULATION
+                        if prev_x is not None and prev_y is not None:
+                            speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
+                                (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
+                            )
 
-                                # DATA LOGGING
+                            if speed_mm_sec > 0:
+                                # If the timer was paused, resume it
+                                if last_pause_start is not None:
+                                    paused_time += time.time() - last_pause_start
+                                    last_pause_start = None  # Reset pause tracker
+                                    print("[DEBUG] Resuming timer - Movement detected.")
+
                                 log_data(log_file, [
                                     datetime.now(), *left_pupil, *right_pupil, speed_px_sec, speed_mm_sec, speed_deg_sec
                                 ])
+                            else:
+                                # If no movement, start pause timer if not already started
+                                if last_pause_start is None:
+                                    last_pause_start = time.time()
+                                    print("[DEBUG] Pausing timer - No movement detected.")
 
-                                # VISUAL FEEDBACK
-                                cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                                cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                            # VISUAL FEEDBACK
+                            cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            cv2.putText(frame, f"Speed: {speed_deg_sec:.2f} deg/sec", (50, 130),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-                            # Update previous position
-                            prev_x, prev_y = curr_x, curr_y
-                            prev_timestamp = timestamp
-                        else:
-                            print("warning debug skippng frame beacuse pupil coord becomes none")
+                        # Update previous position
+                        prev_x, prev_y = curr_x, curr_y
+                        prev_timestamp = timestamp
+                    else:
+                        print("[WARNING] Skipping frame - Pupil coordinates are None.")
 
             else:
                 # Start pause timer if head is not centered
