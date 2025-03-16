@@ -129,6 +129,8 @@ def get_next_filename(patient_name):
 
 
 
+
+
 def track_eye_speed(patient_name, tracking_duration=10):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
@@ -163,15 +165,15 @@ def track_eye_speed(patient_name, tracking_duration=10):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_detector(gray)
 
-        # Update moving shape position (sinusoidal movement)
-        absolute_time_elapsed = time.time() - start_time  # Continuous time (ignores pauses)
-
-        shape_x = int(320 + 150 * np.sin(absolute_time_elapsed * 2))  # Smooth horizontal movement
-        shape_y = int(240 + 50 * np.cos(absolute_time_elapsed * 2))   # Smooth vertical movement
-
+        # Update moving shape position (continuous motion)
+        absolute_time_elapsed = time.time() - start_time  # Independent of pause tracking
+        shape_x = int(320 + 150 * np.sin(absolute_time_elapsed * 2))  # Moves left-right
+        shape_y = int(240 + 50 * np.cos(absolute_time_elapsed * 2))  # Moves slightly up/down
 
         # Draw the moving shape (yellow circle)
         cv2.circle(frame, (shape_x, shape_y), shape_radius, (0, 255, 255), -1)
+
+        speed_mm_sec = None  # Default speed to None
 
         if faces:
             face = faces[0]  # Use the first detected face
@@ -200,7 +202,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
                             if speed_mm_sec > 0:
                                 # If the timer was paused, resume it
                                 if last_pause_start is not None:
-                                    paused_time += time.time() - last_pause_start
+                                    paused_time += time.time() - last_pause_start  # Add the paused duration
                                     last_pause_start = None  # Reset pause tracker
                                     print("[DEBUG] Resuming timer - Movement detected.")
 
@@ -233,8 +235,6 @@ def track_eye_speed(patient_name, tracking_duration=10):
                 # TURN SCREEN RED IF HEAD IS OUT OF POSITION
                 red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
                 frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
-
-                # Display warning message
                 cv2.putText(frame, "Adjust Head Position!", (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
 
         else:
@@ -249,11 +249,13 @@ def track_eye_speed(patient_name, tracking_duration=10):
         # Draw original oval safe zone
         cv2.ellipse(frame, (320, 240), (120, 150), 0, 0, 360, (0, 255, 0), 2)
 
-        # TIME REMAINING DISPLAY (Pauses when face is out of position)
-        if last_pause_start is None:
-            elapsed_time = time.time() - start_time - paused_time
-        else:
+        if last_pause_start is not None:
+            # Timer is currently paused, don't count this time
             elapsed_time = time.time() - start_time - paused_time - (time.time() - last_pause_start)
+        else:
+            # Timer is running normally
+            elapsed_time = time.time() - start_time - paused_time
+
 
         remaining_time = max(0, tracking_duration - elapsed_time)
 
@@ -272,6 +274,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
     webcam.release()
     cv2.destroyAllWindows()
     print(f"Speed test completed. Data saved to {log_file}")
+
 
 
 
