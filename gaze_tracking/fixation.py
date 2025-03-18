@@ -28,7 +28,9 @@ class FixationDetector:
         """
         if not current_position:
             self.fixation_start_time = None
-            return False, None
+            return False, None,0
+        
+        fixation_duration = 0
 
         if self.previous_position:
             # Calculate distance between previous and current position
@@ -38,10 +40,11 @@ class FixationDetector:
             if distance < self.threshold:
                 if not self.fixation_start_time:
                     self.fixation_start_time = time.time()
-                elif time.time() - self.fixation_start_time > self.duration:
-                    return True, current_position
+                fixation_duration = time.time() - self.fixation_start_time
+                if fixation_duration > self.duration:
+                    return True, current_position, fixation_duration
             else:
                 self.fixation_start_time = None
 
         self.previous_position = current_position
-        return False, None
+        return False, None,0

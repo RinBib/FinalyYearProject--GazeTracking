@@ -135,7 +135,7 @@ def get_next_filename(patient_name):
 def track_eye_activity(patient_name, tracking_duration=10):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
-                              "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec", "Fixation_Detected", "Fixation_X", "Fixation_Y"])
+                              "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec", "Fixation_Detected", "Fixation_X", "Fixation_Y", "fixation_duration", "Blink_Count", "Blink_Duration"])
 
     webcam = cv2.VideoCapture(0)
 
@@ -154,6 +154,11 @@ def track_eye_activity(patient_name, tracking_duration=10):
     last_pause_start = None  # When pause started
     
     fixation_detector = FixationDetector()
+    blink_count = 0  #  Track Blink Count
+    eyes_closed = False  #  Track Eye Closed State
+    blink_start_time = None  #  Track When Blink Starts
+    blink_durations = []  #
+
 
     # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
@@ -167,7 +172,13 @@ def track_eye_activity(patient_name, tracking_duration=10):
         # Convert frame to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_detector(gray)
-
+        # FIX: Initialize fixation text BEFORE checking for faces
+        fixation_text = "No Fixation"
+        fixation_color = (0, 0, 255)  # Red (No Fixation)
+        fixation_duration = 0
+        blink_text = "Eyes Open"
+        blink_color = (0, 255, 0)
+        
         # Update moving shape position (continuous motion)
         absolute_time_elapsed = time.time() - start_time  # Independent of pause tracking
         shape_x = int(320 + 150 * np.sin(absolute_time_elapsed * 2))  # Moves left-right
@@ -186,6 +197,23 @@ def track_eye_activity(patient_name, tracking_duration=10):
                 # Process gaze tracking when head is properly positioned
                 gaze.refresh(frame)
                 cv2.waitKey(1)
+                
+                 # ✅ BLINK DETECTION
+                if gaze.pupil_left_coords() is None and gaze.pupil_right_coords() is None:
+                    blink_text = "Blink Detected"
+                    blink_color = (0, 0, 255)  # Red when blinking
+
+                    if not eyes_closed:
+                        blink_count += 1
+                        eyes_closed = True
+                        blink_start_time = time.time()  # ✅ Store blink start time
+                else:
+                    if eyes_closed:
+                        blink_duration = (time.time() - blink_start_time) * 1000  # ✅ Calculate blink duration in ms
+                        blink_durations.append(blink_duration)
+                    eyes_closed = False
+                
+                
 
                 if pupils_located():
                     left_pupil = gaze.pupil_left_coords()
@@ -226,12 +254,20 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
 
                         # fixation detection
-                        fixation_detected, fixation_pos = fixation_detector.detect_fixation((curr_x, curr_y))
+                        fixation_detected, fixation_pos, fixation_duration = fixation_detector.detect_fixation((curr_x, curr_y))
                         
+                        if fixation_detected:
+                            fixation_text = f"Fixation Detected ({fixation_duration:.2f}s)"
+                            fixation_color = (0, 255, 0)  # Green (Fixation detected)
+                            
+                            
+                        avg_blink_duration = np.mean(blink_durations) if blink_durations else 0  # Calculate avg blink duration   
+                        
+                        # csv
                         log_data(log_file, [
                             datetime.now(), *left_pupil, *right_pupil,
                             speed_px_sec, speed_mm_sec, speed_deg_sec, fixation_detected, fixation_pos[0] if fixation_detected else None,
-                            fixation_pos[1] if fixation_detected else None
+                            fixation_pos[1] if fixation_detected else None, fixation_duration, blink_count, avg_blink_duration
                         ])
 
 
@@ -244,6 +280,10 @@ def track_eye_activity(patient_name, tracking_duration=10):
                         if last_pause_start is None:
                             last_pause_start = time.time()
                             print("[DEBUG] Pausing timer - Eye tracking lost.")
+
+                cv2.putText(frame, fixation_text, (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.7, fixation_color, 2)
+                cv2.putText(frame, blink_text, (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.7, blink_color, 2)
+
 
                 #  **Speed Display on UI**
                 if speed_mm_sec is not None and speed_mm_sec > 0:
@@ -275,7 +315,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
         # Draw original oval safe zone
         cv2.ellipse(frame, (320, 240), (120, 150), 0, 0, 360, (0, 255, 0), 2)
 
-        # ✅ **Fixed Timer Display Update**
+        #  **Fixed Timer Display Update**
         if last_pause_start is not None:
             # Timer is paused, stop updating elapsed_time
             remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time - (time.time() - last_pause_start)))
@@ -283,11 +323,16 @@ def track_eye_activity(patient_name, tracking_duration=10):
             # Timer is running normally
             remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time))
 
+        
         # Ensure the timer updates correctly even when paused
         cv2.putText(frame, f"Time Left: {int(remaining_time)} sec", (50, 150),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        
+        cv2.putText(frame, fixation_text, (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.7, fixation_color, 2)
 
         cv2.imshow("Eye Speed, Fixzation and  Tracking", frame)
+        
+        
 
         # Stop when time is up
         if remaining_time <= 0:
@@ -302,14 +347,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
 
 
-
-
-
-
-
-
-
-def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50):
+def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50, min_blinks=20):
     folder_path = f"deterministic_model_test/{patient_name}"
     files = sorted([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")])
 
@@ -317,8 +355,8 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50)
         print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
         return
 
-    speeds, fixations = [], []
-    total_data_points, total_fixations = 0,0
+    speeds, fixations, blink_frequencies, blink_durations = [], [], [], []
+    total_data_points, total_fixations, total_blinks = 0,0,0
 
     for file in files[-7:]:  
         df = pd.read_csv(os.path.join(folder_path, file))
@@ -326,29 +364,38 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50)
         
         # FIXATION
         valid_fixations = df["Fixation_Detected"].dropna().sum() 
+        valid_blink_freqs = df["Blink_Count"].dropna().tolist()  # Blink frequency per second
+        valid_blink_durations = df["Blink_Duration"].dropna().tolist()  # 
         
         speeds.extend(valid_speeds)
         fixations.append(valid_fixations)
+        blink_frequencies.extend(valid_blink_freqs)
+        blink_durations.extend(valid_blink_durations)
+        
         total_data_points += len(valid_speeds)
         total_fixations += valid_fixations
+        total_blinks += len(valid_blink_durations)
 
     # Check if there are enough data points
-    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7:
-        print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} required data points collected.")
+    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7:
+        print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} fixations, {total_blinks}/{min_blinks * 7}  required data points collected.")
         return
 
     avg_speed = np.mean(speeds)
     avg_fixations = np.mean(fixations)
+    avg_blink_freq = np.mean(blink_frequencies)
+    avg_blink_duration = np.mean(blink_durations)
 
-    if avg_speed < 5 and avg_fixations <50:
-        prediction = "Possible Fatigue / Slow Cognitive Response"
-    elif 5 <= avg_speed <= 20 and avg_fixations >= 50:
+    if avg_speed < 5 and avg_fixations < 50 and avg_blink_freq < 0.2 and avg_blink_duration > 400:
+        prediction = "Possible Fatigue / Drowsiness"
+    elif 5 <= avg_speed <= 20 and avg_fixations >= 50 and 0.2 <= avg_blink_freq <= 0.5 and 200 <= avg_blink_duration <= 300:
         prediction = "Normal Eye Movement"
-    elif avg_speed > 20 or avg_fixations > 100:
-        prediction = "Possible Attention Deficit / Hyperactivity"
+    elif avg_speed > 20 or avg_fixations > 100 or avg_blink_freq > 0.5 and avg_blink_duration < 200:
+        prediction = "Possible Attention Deficit / High Cognitive Load"
+    elif avg_blink_duration > 500:
+        prediction = "Possible Neurological Disorder (Check Medical Attention)"
     else:
         prediction = "Possible Restlessness / Attention Issues"
-
     print(f"Prediction for {patient_name} after 7 days: {prediction}")
 
     
@@ -374,9 +421,13 @@ def plot_weekly_speed_trend(patient_name):
         df = pd.read_csv(os.path.join(folder_path, file))
         avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())  # Compute the average speed for the session
         avg_fixations = df["Fixation_Detected"].dropna().sum()
+        avg_blink_freq = np.mean(df["Blink_Count"].dropna())  
+        avg_blink_duration = np.mean(df["Blink_Duration"].dropna())
+        
         avg_speeds.append(avg_speed)
         avg_fixations.append(avg_fixations)
-        
+        avg_blink_freq.append(avg_blink_freq)
+        avg_blink_duration.append(avg_blink_duration)
         
     # Generate Scatter Plot
     plt.figure(figsize=(8, 5))
@@ -408,6 +459,30 @@ def plot_weekly_speed_trend(patient_name):
     plt.show()
     
     print(f"Weekly speed trend graph saved to: {graph_path}")
+    
+    #  BLINK FREQUENCY TREND PLOT
+    plt.figure(figsize=(8, 5))
+    plt.plot(day_numbers, avg_blink_freq, marker='^', linestyle='-', color='purple', label="Blink Frequency (blinks/sec)")
+    plt.xlabel("Day Number")
+    plt.ylabel("Blink Frequency (blinks/sec)")
+    plt.title(f"Blink Frequency Trend Over 7 Days - {patient_name}")
+    plt.xticks(day_numbers)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"{folder_path}/{patient_name}_blink_frequency_trend.png")
+    plt.show()
+
+    #  BLINK DURATION TREND PLOT
+    plt.figure(figsize=(8, 5))
+    plt.plot(day_numbers, avg_blink_duration,marker='d', linestyle='-', color='red', label="Blink Duration (ms)")
+    plt.xlabel("Day Number")
+    plt.ylabel("Blink Duration (ms)")
+    plt.title(f"Blink Duration Trend Over 7 Days - {patient_name}")
+    plt.xticks(day_numbers)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"{folder_path}/{patient_name}_blink_duration_trend.png")
+    plt.show()
 
 
 
