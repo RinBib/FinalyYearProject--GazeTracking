@@ -9,11 +9,13 @@ import math
 import pandas as pd  
 import matplotlib.pyplot as plt  
 import dlib
+from gaze_tracking import GazeTracking
+from gaze_tracking.fixation import FixationDetector
 
 # Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from gaze_tracking import GazeTracking
+
 
 # Initialize GazeTracking
 gaze = GazeTracking()
@@ -130,10 +132,10 @@ def get_next_filename(patient_name):
 
 
 
-def track_eye_speed(patient_name, tracking_duration=10):
+def track_eye_activity(patient_name, tracking_duration=10):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
-                              "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec"])
+                              "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec", "Fixation_Detected", "Fixation_X", "Fixation_Y"])
 
     webcam = cv2.VideoCapture(0)
 
@@ -150,6 +152,8 @@ def track_eye_speed(patient_name, tracking_duration=10):
     start_time = time.time()
     paused_time = 0  # Total paused time
     last_pause_start = None  # When pause started
+    
+    fixation_detector = FixationDetector()
 
     # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
@@ -192,6 +196,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
                         curr_x = (left_pupil[0] + right_pupil[0]) / 2
                         curr_y = (left_pupil[1] + right_pupil[1]) / 2
 
+                        speed_px_sec, speed_mm_sec, speed_deg_sec = 0, 0, 0  
                         # SPEED CALCULATION
                         if prev_x is not None and prev_y is not None:
                             speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
@@ -219,6 +224,18 @@ def track_eye_speed(patient_name, tracking_duration=10):
                                 last_pause_start = time.time()
                                 print("[DEBUG] Pausing timer - No pupils detected.")
 
+
+                        # fixation detection
+                        fixation_detected, fixation_pos = fixation_detector.detect_fixation((curr_x, curr_y))
+                        
+                        log_data(log_file, [
+                            datetime.now(), *left_pupil, *right_pupil,
+                            speed_px_sec, speed_mm_sec, speed_deg_sec, fixation_detected, fixation_pos[0] if fixation_detected else None,
+                            fixation_pos[1] if fixation_detected else None
+                        ])
+
+
+
                         # Update previous position
                         prev_x, prev_y = curr_x, curr_y
                         prev_timestamp = timestamp
@@ -228,7 +245,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
                             last_pause_start = time.time()
                             print("[DEBUG] Pausing timer - Eye tracking lost.")
 
-                # ✅ **Speed Display on UI**
+                #  **Speed Display on UI**
                 if speed_mm_sec is not None and speed_mm_sec > 0:
                     cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
@@ -270,7 +287,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
         cv2.putText(frame, f"Time Left: {int(remaining_time)} sec", (50, 150),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-        cv2.imshow("Eye Speed Tracking", frame)
+        cv2.imshow("Eye Speed, Fixzation and  Tracking", frame)
 
         # Stop when time is up
         if remaining_time <= 0:
@@ -292,7 +309,7 @@ def track_eye_speed(patient_name, tracking_duration=10):
 
 
 
-def check_weekly_prediction(patient_name):
+def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50):
     folder_path = f"deterministic_model_test/{patient_name}"
     files = sorted([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")])
 
@@ -300,21 +317,40 @@ def check_weekly_prediction(patient_name):
         print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
         return
 
-    speeds = []
+    speeds, fixations = [], []
+    total_data_points, total_fixations = 0,0
+
     for file in files[-7:]:  
         df = pd.read_csv(os.path.join(folder_path, file))
-        speeds.extend(df["Speed_mm_per_sec"].dropna().tolist())  
+        valid_speeds = df["Speed_mm_per_sec"].dropna().tolist()
+        
+        # FIXATION
+        valid_fixations = df["Fixation_Detected"].dropna().sum() 
+        
+        speeds.extend(valid_speeds)
+        fixations.append(valid_fixations)
+        total_data_points += len(valid_speeds)
+        total_fixations += valid_fixations
+
+    # Check if there are enough data points
+    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7:
+        print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} required data points collected.")
+        return
 
     avg_speed = np.mean(speeds)
+    avg_fixations = np.mean(fixations)
 
-    if avg_speed < 5:
+    if avg_speed < 5 and avg_fixations <50:
         prediction = "Possible Fatigue / Slow Cognitive Response"
-    elif 5 <= avg_speed <= 20:
+    elif 5 <= avg_speed <= 20 and avg_fixations >= 50:
         prediction = "Normal Eye Movement"
+    elif avg_speed > 20 or avg_fixations > 100:
+        prediction = "Possible Attention Deficit / Hyperactivity"
     else:
         prediction = "Possible Restlessness / Attention Issues"
 
     print(f"Prediction for {patient_name} after 7 days: {prediction}")
+
     
     
 def plot_weekly_speed_trend(patient_name):
@@ -337,8 +373,11 @@ def plot_weekly_speed_trend(patient_name):
     for file in files[-7:]:  # Get the last 7 files
         df = pd.read_csv(os.path.join(folder_path, file))
         avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())  # Compute the average speed for the session
+        avg_fixations = df["Fixation_Detected"].dropna().sum()
         avg_speeds.append(avg_speed)
-
+        avg_fixations.append(avg_fixations)
+        
+        
     # Generate Scatter Plot
     plt.figure(figsize=(8, 5))
     plt.scatter(day_numbers, avg_speeds, color='blue', label="Average Speed (mm/sec)")
@@ -356,6 +395,18 @@ def plot_weekly_speed_trend(patient_name):
     plt.savefig(graph_path)
     plt.show()
 
+    # Fixation Plot
+    plt.figure(figsize=(8, 5))
+    plt.plot(day_numbers, avg_fixations, marker='s', linestyle='--', color='green', label="Total Fixations")
+    plt.xlabel("Day Number")
+    plt.ylabel("Fixations Count")
+    plt.title(f"Fixation Trend Over 7 Days - {patient_name}")
+    plt.grid(True)
+     # Save & Show Graph
+    graph_path = f"{folder_path}/{patient_name}_weekly_fixation_trend.png"
+    plt.legend()
+    plt.show()
+    
     print(f"Weekly speed trend graph saved to: {graph_path}")
 
 
@@ -384,7 +435,7 @@ if __name__ == "__main__":
             print("Error: Patient name cannot be empty.")
 
    # Run tracking for the current session
-track_eye_speed(patient_name, tracking_duration=10)
+track_eye_activity(patient_name, tracking_duration=10)
 
 # Ensure at least 7 sessions before making grapgh
 if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
