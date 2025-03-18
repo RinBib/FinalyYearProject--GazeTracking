@@ -26,6 +26,10 @@ FRAME_WIDTH, FRAME_HEIGHT = 640, 480
 # (x1,y1) (x2,y2)
 SAFE_ZONE = (200, 100, 440, 380) 
 
+SACCADE_VELOCITY_THRESHOLD = 3.0# deg/sec (Adjust this based on research)
+SACCADE_DURATION_THRESHOLD = 50  # ms (Average duration of a saccade)
+SACCADE_MIN_DURATION = 180  # ✅ Ensure only real saccades are counted
+
 # Constants for real-world conversion
 DPI = 96  
 SCREEN_DISTANCE_MM = 600  
@@ -104,20 +108,22 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
     
     distance_px = np.sqrt((curr_point[0] - prev_point[0])**2 + (curr_point[1] - prev_point[1])**2)
     #time_diff = curr_time - prev_time
-    time_diff = (curr_time - prev_time) / 1000  # Convert ms to seconds
+    time_diff = max((curr_time - prev_time) / 1000, 0.001)  # ✅ Prevents division by zero
+
 
     if time_diff <= 0:
-        return 0, 0, 0  # Avoid division by zero
+        return 0, 0, 0, time_diff # Avoid division by zero
 
     # Convert pixels to mm
-    distance_mm = distance_px * PIXEL_TO_MM
+    distance_mm = distance_px * PIXEL_TO_MM * 2  # ✅ Scaling factor to better match real eye movements
+
     speed_mm_sec = distance_mm / time_diff
 
     # Convert mm to degrees of visual angle
     speed_deg_sec = 2 * math.degrees(math.atan(distance_mm / (2 * SCREEN_DISTANCE_MM))) / time_diff
     print(f"Distance in mm: {distance_mm}, Time diff: {time_diff}, Speed in mm/sec: {speed_mm_sec}")
 
-    return distance_px / time_diff, speed_mm_sec, speed_deg_sec  
+    return distance_px / time_diff, speed_mm_sec, speed_deg_sec, time_diff
 
 
 def get_next_filename(patient_name):
@@ -135,7 +141,10 @@ def get_next_filename(patient_name):
 def track_eye_activity(patient_name, tracking_duration=10):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
-                              "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec", "Speed_mm_per_sec", "Speed_deg_per_sec", "Fixation_Detected", "Fixation_X", "Fixation_Y", "fixation_duration", "Blink_Count", "Blink_Duration"])
+                              "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec",
+                              "Speed_mm_per_sec", "Speed_deg_per_sec", "Fixation_Detected",
+                              "Fixation_X", "Fixation_Y", "fixation_duration", "Blink_Count",
+                              "Blink_Duration", "Saccade_Count", "Saccade_Duration"])
 
     webcam = cv2.VideoCapture(0)
 
@@ -159,6 +168,10 @@ def track_eye_activity(patient_name, tracking_duration=10):
     blink_start_time = None  #  Track When Blink Starts
     blink_durations = []  #
 
+    saccade_count = 0  #  Track Total Saccades
+    saccade_durations = []  #  Store Saccade Durations
+    saccade_start_time = None  #  Track When Saccade Starts
+    saccade_detected = False  #  Default State
 
     # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
@@ -178,6 +191,8 @@ def track_eye_activity(patient_name, tracking_duration=10):
         fixation_duration = 0
         blink_text = "Eyes Open"
         blink_color = (0, 255, 0)
+        saccade_text = "No Saccade"
+        saccade_color = (255, 255, 255)  # White (No Saccade)
         
         # Update moving shape position (continuous motion)
         absolute_time_elapsed = time.time() - start_time  # Independent of pause tracking
@@ -198,7 +213,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
                 gaze.refresh(frame)
                 cv2.waitKey(1)
                 
-                 # ✅ BLINK DETECTION
+                 #  BLINK DETECTION
                 if gaze.pupil_left_coords() is None and gaze.pupil_right_coords() is None:
                     blink_text = "Blink Detected"
                     blink_color = (0, 0, 255)  # Red when blinking
@@ -206,10 +221,10 @@ def track_eye_activity(patient_name, tracking_duration=10):
                     if not eyes_closed:
                         blink_count += 1
                         eyes_closed = True
-                        blink_start_time = time.time()  # ✅ Store blink start time
+                        blink_start_time = time.time()  #  Store blink start time
                 else:
                     if eyes_closed:
-                        blink_duration = (time.time() - blink_start_time) * 1000  # ✅ Calculate blink duration in ms
+                        blink_duration = (time.time() - blink_start_time) * 1000  #  Calculate blink duration in ms
                         blink_durations.append(blink_duration)
                     eyes_closed = False
                 
@@ -221,16 +236,46 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
                     if left_pupil and right_pupil and None not in left_pupil and None not in right_pupil:
                         timestamp = datetime.now().timestamp() * 1000
+                        # ✅ Ensure prev_timestamp is defined
+                        if prev_timestamp is not None:
+                            time_diff = (timestamp - prev_timestamp) / 1000  # Convert ms to sec
+                        else:
+                            time_diff = 0  # First frame, no time difference
+
                         curr_x = (left_pupil[0] + right_pupil[0]) / 2
                         curr_y = (left_pupil[1] + right_pupil[1]) / 2
 
                         speed_px_sec, speed_mm_sec, speed_deg_sec = 0, 0, 0  
                         # SPEED CALCULATION
                         if prev_x is not None and prev_y is not None:
-                            speed_px_sec, speed_mm_sec, speed_deg_sec = calculate_speed(
+                            speed_px_sec, speed_mm_sec, speed_deg_sec, time_diff = calculate_speed(
                                 (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
                             )
+                            
+                            #  Print Debugging Info for Speed
+                            print(f"[DEBUG] Speed: {speed_deg_sec:.2f} deg/sec | Threshold: {SACCADE_VELOCITY_THRESHOLD} deg/sec")
 
+                            #  Saccade Detection Based on Speed & Duration
+                            if speed_deg_sec > SACCADE_VELOCITY_THRESHOLD and time_diff > (SACCADE_MIN_DURATION / 1000):
+                                print("[DEBUG] Saccade Detected!")  #  Print confirmation for debugging
+
+                             #  DETECT SACCADE IF SPEED > THRESHOLD
+                           # if speed_deg_sec > 30:  # Adjust threshold if needed
+                                if not saccade_detected:
+                                    saccade_detected = True
+                                    saccade_start_time = time.time()
+                                    saccade_count += 1  #  INCREMENT SACCADE COUNT
+                                    saccade_text = "Saccade Detected"
+                                    saccade_color = (255, 0, 0)  # Blue (Saccade Detected)
+                            else:
+                                if saccade_detected:
+                                    saccade_duration = (time.time() - saccade_start_time) * 1000
+                                    saccade_durations.append(saccade_duration)
+                                    saccade_detected = False  # RESET SACCADE STATE
+
+
+                            
+                            
                             if speed_mm_sec is not None and speed_mm_sec > 0:
                                 # Resume timer if it was paused
                                 if last_pause_start is not None:
@@ -262,12 +307,13 @@ def track_eye_activity(patient_name, tracking_duration=10):
                             
                             
                         avg_blink_duration = np.mean(blink_durations) if blink_durations else 0  # Calculate avg blink duration   
+                        avg_saccade_duration = np.mean(saccade_durations) if saccade_durations else 0  
                         
                         # csv
                         log_data(log_file, [
                             datetime.now(), *left_pupil, *right_pupil,
                             speed_px_sec, speed_mm_sec, speed_deg_sec, fixation_detected, fixation_pos[0] if fixation_detected else None,
-                            fixation_pos[1] if fixation_detected else None, fixation_duration, blink_count, avg_blink_duration
+                            fixation_pos[1] if fixation_detected else None, fixation_duration, blink_count, avg_blink_duration, saccade_count, avg_saccade_duration
                         ])
 
 
@@ -283,7 +329,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
                 cv2.putText(frame, fixation_text, (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.7, fixation_color, 2)
                 cv2.putText(frame, blink_text, (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.7, blink_color, 2)
-
+                cv2.putText(frame, saccade_text, (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, saccade_color, 2)
 
                 #  **Speed Display on UI**
                 if speed_mm_sec is not None and speed_mm_sec > 0:
@@ -347,7 +393,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
 
 
-def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50, min_blinks=20):
+def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50, min_blinks=20, min_saccades=10):
     folder_path = f"deterministic_model_test/{patient_name}"
     files = sorted([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")])
 
@@ -356,7 +402,8 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
         return
 
     speeds, fixations, blink_frequencies, blink_durations = [], [], [], []
-    total_data_points, total_fixations, total_blinks = 0,0,0
+    saccade_counts, saccade_durations = [], []
+    total_data_points, total_fixations, total_blinks, total_saccades = 0,0,0,0
 
     for file in files[-7:]:  
         df = pd.read_csv(os.path.join(folder_path, file))
@@ -366,33 +413,40 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
         valid_fixations = df["Fixation_Detected"].dropna().sum() 
         valid_blink_freqs = df["Blink_Count"].dropna().tolist()  # Blink frequency per second
         valid_blink_durations = df["Blink_Duration"].dropna().tolist()  # 
+        valid_saccade_counts = df["Saccade_Count"].dropna().tolist()
+        valid_saccade_durations = df["Saccade_Duration"].dropna().tolist()
         
         speeds.extend(valid_speeds)
         fixations.append(valid_fixations)
         blink_frequencies.extend(valid_blink_freqs)
         blink_durations.extend(valid_blink_durations)
+        saccade_counts.extend(valid_saccade_counts)
+        saccade_durations.extend(valid_saccade_durations)
         
         total_data_points += len(valid_speeds)
         total_fixations += valid_fixations
         total_blinks += len(valid_blink_durations)
-
+        total_saccades += len(valid_saccade_counts)
+        
     # Check if there are enough data points
-    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7:
-        print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} fixations, {total_blinks}/{min_blinks * 7}  required data points collected.")
+    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7 or total_saccades < min_saccades * 7:
+        print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} fixations, {total_blinks}/{min_blinks * 7} blinks, {total_saccades}/{min_saccades * 7} saccades collected.")
         return
 
     avg_speed = np.mean(speeds)
     avg_fixations = np.mean(fixations)
     avg_blink_freq = np.mean(blink_frequencies)
     avg_blink_duration = np.mean(blink_durations)
-
-    if avg_speed < 5 and avg_fixations < 50 and avg_blink_freq < 0.2 and avg_blink_duration > 400:
+    avg_saccade_count = np.mean(saccade_counts)
+    avg_saccade_duration = np.mean(saccade_durations)
+    
+    if avg_speed < 5 and avg_fixations < 50 and avg_blink_freq < 0.2 and avg_blink_duration > 400 and avg_saccade_count < 5:
         prediction = "Possible Fatigue / Drowsiness"
-    elif 5 <= avg_speed <= 20 and avg_fixations >= 50 and 0.2 <= avg_blink_freq <= 0.5 and 200 <= avg_blink_duration <= 300:
+    elif 5 <= avg_speed <= 20 and avg_fixations >= 50 and 0.2 <= avg_blink_freq <= 0.5 and 200 <= avg_blink_duration <= 300 and 5 <= avg_saccade_count <= 20:
         prediction = "Normal Eye Movement"
-    elif avg_speed > 20 or avg_fixations > 100 or avg_blink_freq > 0.5 and avg_blink_duration < 200:
+    elif avg_speed > 20 or avg_fixations > 100 or avg_blink_freq > 0.5 and avg_blink_duration < 200 or avg_saccade_count > 20:
         prediction = "Possible Attention Deficit / High Cognitive Load"
-    elif avg_blink_duration > 500:
+    elif avg_blink_duration > 500 or avg_saccade_count < 3:
         prediction = "Possible Neurological Disorder (Check Medical Attention)"
     else:
         prediction = "Possible Restlessness / Attention Issues"
@@ -415,21 +469,27 @@ def plot_weekly_speed_trend(patient_name):
         return
 
     day_numbers = list(range(1, 8))
-    avg_speeds = []
+    avg_speeds, avg_fixations, avg_blink_freq, avg_blink_duration, avg_saccade_count, avg_saccade_duration = [], [], [], [], [], []
 
     for file in files[-7:]:  # Get the last 7 files
         df = pd.read_csv(os.path.join(folder_path, file))
-        avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())  # Compute the average speed for the session
-        avg_fixations = df["Fixation_Detected"].dropna().sum()
-        avg_blink_freq = np.mean(df["Blink_Count"].dropna())  
-        avg_blink_duration = np.mean(df["Blink_Duration"].dropna())
-        
+        #  Compute the correct values
+        avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())  # Average speed
+        avg_fixation = df["Fixation_Detected"].dropna().sum()  # Total fixations in session
+        avg_blink_f = np.mean(df["Blink_Count"].dropna())  # Average blink frequency
+        avg_blink_d = np.mean(df["Blink_Duration"].dropna())  # Average blink duration
+        avg_saccade_c = np.mean(df["Saccade_Count"].dropna())  # Average saccade count
+        avg_saccade_d = np.mean(df["Saccade_Duration"].dropna())  # Average saccade duration
+
+        #  Append the values to the lists
         avg_speeds.append(avg_speed)
-        avg_fixations.append(avg_fixations)
-        avg_blink_freq.append(avg_blink_freq)
-        avg_blink_duration.append(avg_blink_duration)
+        avg_fixations.append(avg_fixation)  
+        avg_blink_freq.append(avg_blink_f)    
+        avg_blink_duration.append(avg_blink_d)    
+        avg_saccade_count.append(avg_saccade_c)  
+        avg_saccade_duration.append(avg_saccade_d)  
         
-    # Generate Scatter Plot
+    # Generate speed Plot
     plt.figure(figsize=(8, 5))
     plt.scatter(day_numbers, avg_speeds, color='blue', label="Average Speed (mm/sec)")
     plt.plot(day_numbers, avg_speeds, linestyle='--', color='gray', alpha=0.7)
@@ -455,10 +515,11 @@ def plot_weekly_speed_trend(patient_name):
     plt.grid(True)
      # Save & Show Graph
     graph_path = f"{folder_path}/{patient_name}_weekly_fixation_trend.png"
+    plt.savefig(graph_path)
     plt.legend()
     plt.show()
     
-    print(f"Weekly speed trend graph saved to: {graph_path}")
+    
     
     #  BLINK FREQUENCY TREND PLOT
     plt.figure(figsize=(8, 5))
@@ -469,7 +530,9 @@ def plot_weekly_speed_trend(patient_name):
     plt.xticks(day_numbers)
     plt.legend()
     plt.grid(True)
-    plt.savefig(f"{folder_path}/{patient_name}_blink_frequency_trend.png")
+    graph_path = f"{folder_path}/{patient_name}_blinking_frequency_trend.png"
+    plt.savefig(graph_path)
+    
     plt.show()
 
     #  BLINK DURATION TREND PLOT
@@ -481,8 +544,39 @@ def plot_weekly_speed_trend(patient_name):
     plt.xticks(day_numbers)
     plt.legend()
     plt.grid(True)
-    plt.savefig(f"{folder_path}/{patient_name}_blink_duration_trend.png")
+    graph_path = f"{folder_path}/{patient_name}_blink_duration_trend.png"
+    plt.savefig(graph_path)
+    
     plt.show()
+
+#  PLOT SACCADE COUNT TREND (NEW!)
+    plt.figure(figsize=(8, 5))
+    plt.plot(day_numbers, avg_saccade_count, marker='*', linestyle='-', color='orange', label="Saccade Count")
+    plt.xlabel("Day Number")
+    plt.ylabel("Saccades per Session")
+    plt.title(f"Saccade Count Trend Over 7 Days - {patient_name}")
+    plt.legend()
+    plt.grid(True)
+    graph_path = f"{folder_path}/{patient_name}_saccade_count_trend.png"
+    plt.savefig(graph_path)
+    
+    plt.show()
+
+    #  PLOT SACCADE DURATION TREND (NEW!)
+    plt.figure(figsize=(8, 5))
+    plt.plot(day_numbers, avg_saccade_duration, marker='h', linestyle='-', color='brown', label="Saccade Duration (ms)")
+    plt.xlabel("Day Number")
+    plt.ylabel("Saccade Duration (ms)")
+    plt.title(f"Saccade Duration Trend Over 7 Days - {patient_name}")
+    plt.legend()
+    plt.grid(True)
+    graph_path = f"{folder_path}/{patient_name}_saccade_duration_trend.png"
+    plt.savefig(graph_path)
+    
+    plt.show()
+
+
+
 
 
 
@@ -517,6 +611,3 @@ if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
     check_weekly_prediction(patient_name)
     plot_weekly_speed_trend(patient_name)
 
-
-
-    
