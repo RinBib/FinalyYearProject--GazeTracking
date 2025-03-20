@@ -32,8 +32,25 @@ SACCADE_MIN_DURATION = 180  # ✅ Ensure only real saccades are counted
 
 # Constants for real-world conversion
 DPI = 96  
-SCREEN_DISTANCE_MM = 600  
+SCREEN_DISTANCE_MM = 600 
+MAX_DISTANCE_MM = 800  #  Maximum distance before pausing tracking
+# Assume a reference face width at 60 cm distance
+KNOWN_FACE_WIDTH_MM = 150  # Approximate human face width in mm
+FOCAL_LENGTH = 500  # Estimated camera focal length 
+
 PIXEL_TO_MM = 25.4 / DPI  
+ 
+def estimate_distance(face_width_px):
+    """
+    Estimates the user's distance from the screen using face size.
+    - Larger faces mean closer distance.
+    - Smaller faces mean further distance.
+    """
+    if face_width_px == 0:
+        return SCREEN_DISTANCE_MM  # Default if no face is detected
+    return (KNOWN_FACE_WIDTH_MM * FOCAL_LENGTH) / face_width_px
+ 
+ 
  
 # Make csv
 def initialize_csv(log_file, headers):
@@ -176,6 +193,8 @@ def track_eye_activity(patient_name, tracking_duration=10):
     # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
     shape_radius = 20
+    SCREEN_DISTANCE_MM = 600  # ✅ Default distance if no face is detected at the start
+
 
     while True:
         ret, frame = webcam.read()
@@ -185,6 +204,51 @@ def track_eye_activity(patient_name, tracking_duration=10):
         # Convert frame to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_detector(gray)
+        if faces:
+            
+            for face in faces:  #  Loop through detected faces
+                face_width_px = face.right() - face.left()  #  Get face width in pixels
+                SCREEN_DISTANCE_MM = estimate_distance(face_width_px)  # Update distance dynamically
+                print(f"[DEBUG] Estimated Distance: {SCREEN_DISTANCE_MM:.2f} mm")
+            
+                #  Debugging output
+                #  CHECK IF USER IS TOO FAR
+                if SCREEN_DISTANCE_MM > MAX_DISTANCE_MM:
+                    print("[WARNING] Too far from the screen! Pausing tracking...")
+
+                    #  Turn screen red
+                    red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
+                    frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
+        
+                    # Show Warning Text
+                    cv2.putText(frame, "Too Far! Move Closer", (150, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
+
+                    #  Pause timer if not already paused
+                    if last_pause_start is None:
+                        last_pause_start = time.time()  #  Set pause start time once
+                else:
+            #  Resume timer if user moves closer
+                    if last_pause_start is not None:
+                        paused_time += time.time() - last_pause_start  #  Accumulate paused time
+                        last_pause_start = None  #  Reset pause tracker
+
+        else:
+            # ✅ If no face detected, treat it like the user is too far
+            print("[WARNING] No face detected! Pausing tracking...")
+
+            # ✅ Turn screen red
+            red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  
+            frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  
+
+            # ✅ Show Warning Text
+            cv2.putText(frame, "No Face Detected! Please Step Closer", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
+
+            # ✅ Pause timer if not already paused
+            if last_pause_start is None:
+                last_pause_start = time.time()
+            
+            #SCREEN_DISTANCE_MM = 600  # Default to 60 cm if face is not detected
+        
         # FIX: Initialize fixation text BEFORE checking for faces
         fixation_text = "No Fixation"
         fixation_color = (0, 0, 255)  # Red (No Fixation)
@@ -375,10 +439,21 @@ def track_eye_activity(patient_name, tracking_duration=10):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         
         cv2.putText(frame, fixation_text, (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.7, fixation_color, 2)
+        
+        #  Display estimated distance in bottom-left corner of UI
+        distance_text = f"Distance: {SCREEN_DISTANCE_MM:.1f} mm"
+        cv2.putText(frame, distance_text, (10, FRAME_HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        cv2.imshow("Eye Speed, Fixzation and  Tracking", frame)
-        
-        
+        #  Adjust timer logic based on distance
+        if SCREEN_DISTANCE_MM > MAX_DISTANCE_MM or last_pause_start is not None:
+            #  Keep pausing the timer if user is too far
+            remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time - (time.time() - last_pause_start)))
+        else:
+            #  Resume normal timer if user moves closer
+            remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time))
+
+        cv2.imshow("Eye Speed, Fixation, Blinking and Tracking", frame)
+
 
         # Stop when time is up
         if remaining_time <= 0:
