@@ -65,8 +65,15 @@ def process_gaze_data(csv_file):
 
 
 
-# ✅ Test with a sample image
 if __name__ == "__main__":
+    print("🔹 Running AI Model with DeepGazeIIE & Eye-Tracking Data...")
+
+    # ✅ Process Sample Image
     saliency_map = process_image("sample_image.jpg")
+    if saliency_map is not None:
+        print("✅ DeepGazeIIE Prediction Complete!")
+
+    # ✅ Process Sample CSV
     gaze_data = process_gaze_data("deterministic_model_test/sample_gaze.csv")
-    print("DeepGazeIIE Prediction Complete!")
+
+    print("✅ Gaze Data Extraction Complete!")
