@@ -1,7 +1,7 @@
 import os
 import torch
 from ai_model import process_gaze_data
-from train_ai_model import CognitiveDeclineModel
+from training_CNN import CognitiveDeclineModel
 
 # ✅ Use GPU if available
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
