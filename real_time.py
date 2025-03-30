@@ -125,14 +125,14 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
     
     distance_px = np.sqrt((curr_point[0] - prev_point[0])**2 + (curr_point[1] - prev_point[1])**2)
     #time_diff = curr_time - prev_time
-    time_diff = max((curr_time - prev_time) / 1000, 0.001)  # ✅ Prevents division by zero
+    time_diff = max((curr_time - prev_time) / 1000, 0.001)  #  Prevents division by zero
 
 
     if time_diff <= 0:
         return 0, 0, 0, time_diff # Avoid division by zero
 
     # Convert pixels to mm
-    distance_mm = distance_px * PIXEL_TO_MM * 2  # ✅ Scaling factor to better match real eye movements
+    distance_mm = distance_px * PIXEL_TO_MM * 2  #  Scaling factor to better match real eye movements
 
     speed_mm_sec = distance_mm / time_diff
 
@@ -193,7 +193,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
     # Moving shape properties
     shape_x, shape_y = 320, 240  # Start in center
     shape_radius = 20
-    SCREEN_DISTANCE_MM = 600  # ✅ Default distance if no face is detected at the start
+    SCREEN_DISTANCE_MM = 600  #  Default distance if no face is detected at the start
 
 
     while True:
@@ -233,17 +233,17 @@ def track_eye_activity(patient_name, tracking_duration=10):
                         last_pause_start = None  #  Reset pause tracker
 
         else:
-            # ✅ If no face detected, treat it like the user is too far
+            #  If no face detected, treat it like the user is too far
             print("[WARNING] No face detected! Pausing tracking...")
 
-            # ✅ Turn screen red
+            #  Turn screen red
             red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  
             frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  
 
-            # ✅ Show Warning Text
+            #  Show Warning Text
             cv2.putText(frame, "No Face Detected! Please Step Closer", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
 
-            # ✅ Pause timer if not already paused
+            #  Pause timer if not already paused
             if last_pause_start is None:
                 last_pause_start = time.time()
             
@@ -300,7 +300,7 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
                     if left_pupil and right_pupil and None not in left_pupil and None not in right_pupil:
                         timestamp = datetime.now().timestamp() * 1000
-                        # ✅ Ensure prev_timestamp is defined
+                        #  Ensure prev_timestamp is defined
                         if prev_timestamp is not None:
                             time_diff = (timestamp - prev_timestamp) / 1000  # Convert ms to sec
                         else:

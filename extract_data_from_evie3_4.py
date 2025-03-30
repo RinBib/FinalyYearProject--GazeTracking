@@ -19,6 +19,6 @@ for path in file_paths:
 if processed_data:
     final_df = pd.concat(processed_data, ignore_index=True)
     final_df.to_csv("john_cleaned_combined.csv", index=False)
-    print("✅ Cleaned dataset saved as 'john_cleaned_combined.csv'")
+    print(" Cleaned dataset saved as 'john_cleaned_combined.csv'")
 else:
-    print("❌ No valid files found to process.")
+    print(" No valid files found to process.")
