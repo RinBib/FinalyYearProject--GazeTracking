@@ -3,7 +3,11 @@ import glob
 
 # Uses glob to find all relevant files
 file_paths = sorted(glob.glob("deterministic_model_test/evie3/evie3_speed_test_*.csv") +
-                    glob.glob("deterministic_model_test/evie4/evie4_speed_test_*.csv"))
+                    glob.glob("deterministic_model_test/evie4/evie4_speed_test_*.csv") +
+                    glob.glob("deterministic_model_test/evie5/evie5_speed_test_*.csv") +
+                    glob.glob("deterministic_model_test/evie6/evie6_speed_test_*.csv") +
+                    glob.glob("deterministic_model_test/evie7/evie7_speed_test_*.csv") +
+                    glob.glob("deterministic_model_test/evie8/evie8_speed_test_*.csv"))
 
 print("Files found:", file_paths)
 
