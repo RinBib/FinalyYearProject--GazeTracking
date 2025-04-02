@@ -16,12 +16,12 @@ evangel_df = pd.read_csv("cleaned_extracted_data\evangeline_cleaned_combined.csv
 john_df["label"] = "impaired"
 evangel_df["label"] = "healthy"
 
-# Combine the datasets and shuffle them for randomness
-# This helps the model generalize better and prevents bias from data ordering
+# Combine the datasets and shuffle 
 data_df = pd.concat([john_df, evangel_df], ignore_index=True)
-data_df = data_df.dropna().sample(frac=1).reset_index(drop=True)  # Drop missing data and shuffle
+# Drop missing data and shuffle
+data_df = data_df.dropna().sample(frac=1).reset_index(drop=True) 
 
-# Define which columns are the features (inputs to the model)
+# Define which columns 
 # These include eye speed, pupil coordinates, and movement indicators like blinks and saccades
 features = [
     'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
@@ -32,10 +32,10 @@ features = [
 
 # Extract feature values and label column
 df_features = data_df[features]
-X = df_features.values  # shape: (samples, features)
+X = df_features.values  
 y = data_df['label'].values
 
-# Convert text labels to binary integers (healthy=0, impaired=1)
+# Convert text labels to binary 
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
@@ -45,19 +45,18 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
 # Segment the gaze data into sequences for LSTM input
-# Each sequence will contain 20 consecutive frames (rows)
-# Why 20? Because:
-# - 20 frames at ~30 FPS = ~0.6 seconds of behavior
-# - This is long enough to capture temporal patterns like fixations, blinks, or saccades
-# - Empirically, 10–30 time steps is a sweet spot for short behavioral sequences in LSTMs
+# Each sequence will contain 20 consecutive frames 
+# 20 frames at 30 FPS = 0.6 seconds of tracking
+# This is long enough to capture temporal patterns like fixations, blinks, or saccades
+# 10–30 time steps is good for short behavioral sequences in LSTMs
 window_size = 20
 X_seq = np.array([X_scaled[i:i+window_size] for i in range(len(X_scaled) - window_size + 1)])
 y_seq = np.array([y_encoded[i + window_size - 1] for i in range(len(X_scaled) - window_size + 1)])
 
-# Split into training and testing sets (80% train, 20% test)
+# Split into training and testing sets 80 20
 X_train, X_test, y_train, y_test = train_test_split(X_seq, y_seq, test_size=0.2, random_state=42)
 
-# Create the CNN + LSTM model from the separate file
+# Create the model
 model = create_cnn_lstm_model(window_size=window_size, num_features=len(features))
 
 model.summary()  # Show model architecture
