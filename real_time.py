@@ -11,6 +11,29 @@ import matplotlib.pyplot as plt
 import dlib
 from gaze_tracking import GazeTracking
 from gaze_tracking.fixation import FixationDetector
+import tkinter as tk
+from tkinter import filedialog
+from tensorflow.keras.models import load_model
+# pyright: reportMissingImports=false
+
+# Load the trained cognitive classification model
+cognitive_model = load_model("cognitive_classifier_model.h5")
+
+# FUNCTION TO PREDICT USING THE LOADED MODEL
+def predict_cognitive_state(features):
+    features = np.array(features)  # Make sure it's numpy
+    features = np.expand_dims(features, axis=0)  # (1, 12)
+    features = np.expand_dims(features, axis=1)  # (1, 1, 12)  --> LSTM expects sequences!
+    
+    prediction = cognitive_model.predict(features)
+    predicted_class = np.argmax(prediction, axis=1)[0]
+    return predicted_class
+
+
+
+
+
+
 
 # Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -39,6 +62,69 @@ KNOWN_FACE_WIDTH_MM = 150  # Approximate human face width in mm
 FOCAL_LENGTH = 500  # Estimated camera focal length 
 
 PIXEL_TO_MM = 25.4 / DPI  
+
+
+
+def open_file_explorer():
+    root = tk.Tk()
+    root.withdraw()  # Hide the small tkinter window
+    file_path = filedialog.askopenfilename(
+        title="Select CSV file",
+        filetypes=[("CSV Files", "*.csv")]
+    )
+    return file_path
+
+
+
+
+def predict_from_csv(file_path, patient_name):
+    # Load the imported CSV
+    df = pd.read_csv(file_path)
+
+    # Make sure the CSV has the needed columns
+    required_columns = [
+        'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
+        'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
+        'fixation_duration', 'Blink_Count', 'Blink_Duration',
+        'Saccade_Count', 'Saccade_Duration'
+    ]
+
+    for col in required_columns:
+        if col not in df.columns:
+            print(f"Missing column: {col}")
+            return
+
+    # Take the last 20 rows (like a sequence)
+    if len(df) < 20:
+        print("Not enough data (need at least 20 rows for LSTM model).")
+        return
+
+    last_20 = df[required_columns].tail(20).values
+
+    # Reshape to (1, 20, 12) for LSTM
+    features_for_prediction = np.expand_dims(last_20, axis=0)
+
+    # Predict with AI model
+    prediction = cognitive_model.predict(features_for_prediction)
+    predicted_class = np.argmax(prediction, axis=1)[0]
+
+    if predicted_class == 0:
+        print("[MODEL PREDICTION] Cognitive State: IMPAIRED")
+    else:
+        print("[MODEL PREDICTION] Cognitive State: HEALTHY")
+
+    # Also apply deterministic prediction
+    print("\nRunning deterministic rule-based prediction...")
+    folder_path = f"deterministic_model_test/{patient_name}"
+    os.makedirs(folder_path, exist_ok=True)  # Just to be sure folder exists
+    df.to_csv(f"{folder_path}/{patient_name}_imported_file.csv", index=False)
+
+    # Call your deterministic functions
+    check_weekly_prediction(patient_name)
+    plot_weekly_speed_trend(patient_name)
+
+ 
+ 
  
 def estimate_distance(face_width_px):
     """
@@ -145,12 +231,25 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
 
 def get_next_filename(patient_name):
     folder_path = f"deterministic_model_test/{patient_name}"
-    os.makedirs(folder_path, exist_ok=True)  # Ensure folder exists
+    os.makedirs(folder_path, exist_ok=True)  # Create folder if missing
 
-    existing_files = [f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")]
-    next_number = len(existing_files) + 1  
+    # Find existing patient files
+    existing_files = [f for f in os.listdir(folder_path) if f.startswith(patient_name)]
 
-    return f"{folder_path}/{patient_name}_speed_test_{next_number}.csv"
+    # How many total days already recorded
+    total_days = len(existing_files)
+
+    # Calculate week number
+    week_number = (total_days // 7) + 1  # Every 7 days = next week
+
+    # Calculate day number inside the week
+    day_number = (total_days % 7) + 1  # 1 to 7
+
+    # Create filename like: evie1_1.csv
+    filename = f"{patient_name}{day_number}_{week_number}.csv"
+
+    return os.path.join(folder_path, filename)
+
 
 
 
@@ -385,6 +484,33 @@ def track_eye_activity(patient_name, tracking_duration=10):
                         # Update previous position
                         prev_x, prev_y = curr_x, curr_y
                         prev_timestamp = timestamp
+                        
+
+                        # ai model
+
+                        features_for_prediction = np.array([
+                            left_pupil[0], left_pupil[1], right_pupil[0], right_pupil[1],
+                            speed_px_sec, speed_mm_sec, speed_deg_sec,
+                            fixation_duration, blink_count, avg_blink_duration,
+                            saccade_count, avg_saccade_duration
+                        ], dtype=np.float32)
+
+                        features_for_prediction = features_for_prediction.reshape(1, 20, len(features_for_prediction) // 20)
+
+                        prediction = cognitive_model.predict(features_for_prediction)
+                        predicted_class = np.argmax(prediction, axis=1)[0]
+
+                        if predicted_class == 0:
+                            print("[MODEL PREDICTION] Cognitive State: IMPAIRED")
+                        else:
+                            print("[MODEL PREDICTION] Cognitive State: HEALTHY")
+
+
+
+
+                        
+                        
+                        
                     else:
                         # If pupils are None, also pause the timer
                         if last_pause_start is None:
@@ -526,8 +652,32 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
     else:
         prediction = "Possible Restlessness / Attention Issues"
     print(f"Prediction for {patient_name} after 7 days: {prediction}")
-
     
+    
+    week_number = len([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test")]) // 7
+    save_weekly_summary(patient_name, week_number, prediction)
+
+    # Now check if 4 weekly summaries exist (i.e., 4 weeks = 1 month)
+    summary_file = f"deterministic_model_test/{patient_name}/{patient_name}_weekly_summary.csv"
+    if os.path.exists(summary_file) and len(pd.read_csv(summary_file)) >= 4:
+        plot_monthly_cognitive_trend(patient_name)
+
+
+
+
+# 1 month summary
+def save_weekly_summary(patient_name, week_number, prediction):
+    folder_path = f"deterministic_model_test/{patient_name}"
+    summary_file = os.path.join(folder_path, "weekly_summary.csv")
+
+    # Create the CSV if it doesn't exist yet
+    if not os.path.exists(summary_file):
+        with open(summary_file, mode='w') as file:
+            file.write("Week,Prediction\n")
+
+    with open(summary_file, mode='a') as file:
+        file.write(f"{week_number},{prediction}\n")
+
     
 def plot_weekly_speed_trend(patient_name):
     folder_path = f"deterministic_model_test/{patient_name}"
@@ -651,6 +801,58 @@ def plot_weekly_speed_trend(patient_name):
     plt.show()
 
 
+def plot_monthly_cognitive_trend(patient_name):
+    folder_path = f"deterministic_model_test/{patient_name}"
+    summary_file = os.path.join(folder_path, "weekly_summary.csv")
+
+    if not os.path.exists(summary_file):
+        print(f"No weekly summary found for {patient_name}.")
+        return
+
+    df = pd.read_csv(summary_file)
+
+    if len(df) < 4:
+        print(f"Not enough weeks completed. {len(df)}/4 weeks available.")
+        return
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(df['Week'], df['Prediction'], marker='o', linestyle='--', color='blue')
+    plt.title(f"Monthly Cognitive Trend for {patient_name}")
+    plt.xlabel("Week Number")
+    plt.ylabel("Cognitive State")
+    plt.grid(True)
+
+    graph_path = os.path.join(folder_path, f"{patient_name}_monthly_cognitive_trend.png")
+    plt.savefig(graph_path)
+    plt.show()
+
+    print(f"Monthly trend graph saved to: {graph_path}")
+
+    # predicitons
+    label_to_score = {
+        "Normal Eye Movement": 3,
+        "Possible Restlessness / Attention Issues": 2,
+        "Possible Fatigue / Drowsiness": 2,
+        "Possible Attention Deficit / High Cognitive Load": 1,
+        "Possible Neurological Disorder (Check Medical Attention)": 0
+    }
+
+    # Map text labels to numeric scores
+    df['Score'] = df['Prediction'].map(label_to_score)
+
+    if df['Score'].isnull().any():
+        print("Warning: Some predictions could not be scored.")
+    else:
+        # Compare first half vs second half
+        first_half_avg = df['Score'][:2].mean()
+        second_half_avg = df['Score'][2:].mean()
+
+        if second_half_avg > first_half_avg:
+            print("Trend Analysis: Cognitive performance is improving over the month.")
+        elif second_half_avg < first_half_avg:
+            print("Trend Analysis: Cognitive performance is declining over the month.")
+        else:
+            print("Trend Analysis: No clear trend detected.")
 
 
 
@@ -658,31 +860,55 @@ def plot_weekly_speed_trend(patient_name):
 if __name__ == "__main__":
    
     while True:
-        patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
+        choice = input("Choose mode: \n1 - Live Tracking \n2 - Import CSV for Prediction\nEnter 1 or 2: ").strip()
 
-        if patient_name.lower() == "list":
-            existing_patients = os.listdir("deterministic_model_test")
-            if existing_patients:
-                print("Existing patient records:", ", ".join(existing_patients))
-            else:
-                print("No existing patient records found.")
-            continue
+        if choice == "1":
+            # Live tracking mode
+            patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
 
-        if patient_name:
-            patient_folder = f"deterministic_model_test/{patient_name}"
-            if os.path.exists(patient_folder):
-                print(f"Continuing tracking for existing patient: {patient_name}")
+            if patient_name.lower() == "list":
+                existing_patients = os.listdir("deterministic_model_test")
+                if existing_patients:
+                    print("Existing patient records:", ", ".join(existing_patients))
+                else:
+                    print("No existing patient records found.")
+                continue
+
+            if patient_name:
+                patient_folder = f"deterministic_model_test/{patient_name}"
+                if os.path.exists(patient_folder):
+                    print(f"Continuing tracking for existing patient: {patient_name}")
+                else:
+                    print(f"Creating new tracking folder for patient: {patient_name}")
+                break
             else:
-                print(f"Creating new tracking folder for patient: {patient_name}")
-            break
+                print("Error: Patient name cannot be empty.")
+
+            # Run tracking for the current session
+            track_eye_activity(patient_name, tracking_duration=10)
+
+            # Ensure at least 7 sessions before making graph
+            if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
+                check_weekly_prediction(patient_name)
+                plot_weekly_speed_trend(patient_name)
+
+        elif choice == "2":
+            # Import CSV mode
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            file_path = filedialog.askopenfilename(title="Select a CSV file", filetypes=[("CSV files", "*.csv")])
+
+            if not file_path:
+                print("No file selected. Exiting.")
+                exit()
+
+            patient_name = input("Enter the patient name for this file: ").strip()
+
+            # Now call your function
+            predict_from_csv(file_path, patient_name)
+
         else:
-            print("Error: Patient name cannot be empty.")
-
-   # Run tracking for the current session
-track_eye_activity(patient_name, tracking_duration=10)
-
-# Ensure at least 7 sessions before making grapgh
-if len(os.listdir(f"deterministic_model_test/{patient_name}")) >= 7:
-    check_weekly_prediction(patient_name)
-    plot_weekly_speed_trend(patient_name)
-
+            print("Invalid choice. Please enter 1 or 2.")
