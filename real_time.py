@@ -1,4 +1,5 @@
 # pyright: reportMissingImports=false
+# pyright: reportMissingModuleSource=false
 import cv2
 import numpy as np
 import os
@@ -155,10 +156,19 @@ def get_next_filename(patient_name):
     folder_path = f"deterministic_model_test/{patient_name}"
     os.makedirs(folder_path, exist_ok=True)  # Ensure folder exists
 
-    existing_files = [f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")]
-    next_number = len(existing_files) + 1  
+    # Get all CSVs for this patient
+    existing_files = [f for f in os.listdir(folder_path) if f.endswith(".csv")]
 
-    return f"{folder_path}/{patient_name}_speed_test_{next_number}.csv"
+    total_days = len(existing_files)  # How many total days recorded
+
+    week_number = (total_days // 7) + 1  # Week number (every 7 days is a new week)
+    day_number = (total_days % 7) + 1     # Day number inside the week (1-7)
+
+    # 👇 Create filename using week and day
+    filename = f"{patient_name}_w{week_number}_d{day_number}.csv"
+
+    return os.path.join(folder_path, filename)
+
 
 
 
@@ -478,7 +488,8 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
 def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50, min_blinks=20, min_saccades=10):
     folder_path = f"deterministic_model_test/{patient_name}"
-    files = sorted([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")])
+    files = sorted([f for f in os.listdir(folder_path) if f.endswith(".csv")])
+
 
     if len(files) < 7:
         print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
@@ -589,7 +600,8 @@ def plot_weekly_speed_trend(patient_name):
         print(f"Error: No data found for {patient_name}.")
         return
     
-    files = sorted([f for f in os.listdir(folder_path) if f.startswith(f"{patient_name}_speed_test") and f.endswith(".csv")])
+    files = sorted([f for f in os.listdir(folder_path) if f.endswith(".csv")])
+
 
     if len(files) < 7:
         print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
@@ -739,6 +751,89 @@ def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_
 
 
 
+def generate_monthly_report(patient_name):
+    folder_path = f"deterministic_model_test/{patient_name}"
+    summary_file = os.path.join(folder_path, "weekly_summary.csv")
+
+    if not os.path.exists(summary_file):
+        print("[INFO] No weekly summaries found. Skipping monthly report.")
+        return
+
+    df = pd.read_csv(summary_file)
+
+    if len(df) < 4:
+        print("[INFO] Not enough weeks (4) completed for monthly report.")
+        return
+
+    from fpdf import FPDF
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    pdf.cell(200, 10, txt=f"Monthly Cognitive Report - {patient_name}", ln=True, align='C')
+    pdf.ln(10)
+    pdf.cell(200, 10, txt=f"Date and Time: {now}", ln=True)
+    pdf.ln(10)
+
+    # Add each week's prediction
+    for idx, row in df.iterrows():
+        week = row['Week']
+        prediction = row['Prediction']
+        pdf.cell(200, 10, txt=f"Week {int(week)}: {prediction}", ln=True)
+
+    pdf.ln(10)
+
+    # Trend analysis
+    label_to_score = {
+        "Normal Eye Movement": 3,
+        "Possible Restlessness / Attention Issues": 2,
+        "Possible Fatigue / Drowsiness": 2,
+        "Possible Attention Deficit / High Cognitive Load": 1,
+        "Possible Neurological Disorder (Check Medical Attention)": 0
+    }
+    df['Score'] = df['Prediction'].map(label_to_score)
+
+    first_half = df['Score'][:2].mean()
+    second_half = df['Score'][2:].mean()
+
+    trend = ""
+    if second_half > first_half:
+        trend = "Cognitive performance is improving over the month."
+    elif second_half < first_half:
+        trend = "Cognitive performance is declining over the month."
+    else:
+        trend = "No clear trend detected."
+
+    pdf.multi_cell(0, 10, f"Trend Analysis: {trend}")
+
+    # Save the PDF
+    monthly_report_path = os.path.join(folder_path, f"{patient_name}_Monthly_Report.pdf")
+    pdf.output(monthly_report_path)
+
+    print(f"[INFO] Monthly report saved to: {monthly_report_path}")
+
+
+def save_weekly_summary(patient_name, week_number, prediction):
+    folder_path = f"deterministic_model_test/{patient_name}"
+    summary_file = os.path.join(folder_path, "weekly_summary.csv")
+
+    # Create the file if it doesn't exist
+    if not os.path.exists(summary_file):
+        with open(summary_file, mode='w') as file:
+            file.write("Week,Prediction\n")
+
+    # Append this week's prediction
+    with open(summary_file, mode='a') as file:
+        file.write(f"{week_number},{prediction}\n")
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
    
@@ -805,5 +900,18 @@ if __name__ == "__main__":
 
         # 4️⃣ Generate PDF Report
         week_number = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) // 7
-        generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
+        if deterministic_prediction is not None and ai_prediction is not None:
+            generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
+    
+            # 🆕 ADD THIS LINE
+            save_weekly_summary(patient_name, week_number, deterministic_prediction)
+
+        else:
+            print("[WARNING] Skipping PDF generation because predictions are incomplete.")
+
+        # After saving summary, check for 4 weeks
+        if len([f for f in os.listdir(f"deterministic_model_test/{patient_name}") if f.endswith(".csv")]) >= 28:
+            generate_monthly_report(patient_name)
+
+
 
