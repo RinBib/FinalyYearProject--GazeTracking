@@ -490,23 +490,22 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
     folder_path = f"deterministic_model_test/{patient_name}"
     files = sorted([f for f in os.listdir(folder_path) if f.endswith(".csv")])
 
-
     if len(files) < 7:
         print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
-        return
+        return "Not enough data for deterministic prediction."
 
     speeds, fixations, blink_frequencies, blink_durations = [], [], [], []
     saccade_counts, saccade_durations = [], []
-    total_data_points, total_fixations, total_blinks, total_saccades = 0,0,0,0
+    total_data_points, total_fixations, total_blinks, total_saccades = 0, 0, 0, 0
 
     for file in files[-7:]:  
         df = pd.read_csv(os.path.join(folder_path, file))
         valid_speeds = df["Speed_mm_per_sec"].dropna().tolist()
         
         # FIXATION
-        valid_fixations = df["Fixation_Detected"].dropna().sum() 
-        valid_blink_freqs = df["Blink_Count"].dropna().tolist()  # Blink frequency per second
-        valid_blink_durations = df["Blink_Duration"].dropna().tolist()  # 
+        valid_fixations = df["Fixation_Detected"].dropna().sum()
+        valid_blink_freqs = df["Blink_Count"].dropna().tolist()
+        valid_blink_durations = df["Blink_Duration"].dropna().tolist()
         valid_saccade_counts = df["Saccade_Count"].dropna().tolist()
         valid_saccade_durations = df["Saccade_Duration"].dropna().tolist()
         
@@ -521,19 +520,20 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
         total_fixations += valid_fixations
         total_blinks += len(valid_blink_durations)
         total_saccades += len(valid_saccade_counts)
-        
-    # Check if there are enough data points
+
+    # 🔥 FIX THIS AREA 🔥
     if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7 or total_saccades < min_saccades * 7:
         print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} fixations, {total_blinks}/{min_blinks * 7} blinks, {total_saccades}/{min_saccades * 7} saccades collected.")
-        return
+        return "Not enough data for deterministic prediction."
 
+    # If enough data, make prediction
     avg_speed = np.mean(speeds)
     avg_fixations = np.mean(fixations)
     avg_blink_freq = np.mean(blink_frequencies)
     avg_blink_duration = np.mean(blink_durations)
     avg_saccade_count = np.mean(saccade_counts)
     avg_saccade_duration = np.mean(saccade_durations)
-    
+
     if avg_speed < 5 and avg_fixations < 50 and avg_blink_freq < 0.2 and avg_blink_duration > 400 and avg_saccade_count < 5:
         prediction = "Possible Fatigue / Drowsiness"
     elif 5 <= avg_speed <= 20 and avg_fixations >= 50 and 0.2 <= avg_blink_freq <= 0.5 and 200 <= avg_blink_duration <= 300 and 5 <= avg_saccade_count <= 20:
@@ -544,49 +544,9 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
         prediction = "Possible Neurological Disorder (Check Medical Attention)"
     else:
         prediction = "Possible Restlessness / Attention Issues"
+
     print(f"Prediction for {patient_name} after 7 days: {prediction}")
-
-    # 🔥 ADD THIS
     return prediction
-
-# ai model
-def run_ai_model_on_week(patient_name):
-    patient_folder = f"deterministic_model_test/{patient_name}"
-    all_data = []
-    
-    for file in sorted(os.listdir(patient_folder)):
-        if file.endswith(".csv"):
-            df = pd.read_csv(os.path.join(patient_folder, file))
-            df.columns = df.columns.str.strip()  # Clean columns
-            
-            required_columns = [
-                'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
-                'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
-                'fixation_duration', 'Blink_Count', 'Blink_Duration',
-                'Saccade_Count', 'Saccade_Duration'
-            ]
-            
-            if all(col in df.columns for col in required_columns):
-                all_data.append(df[required_columns])
-
-    if all_data:
-        combined_df = pd.concat(all_data, ignore_index=True)
-        
-        # 🛠️ Always use **ALL the data**:
-        input_data = combined_df.values
-        
-        # Expand dims for model
-        features_for_prediction = np.expand_dims(input_data, axis=0)  # (1, total_rows, 12)
-        
-        prediction = cognitive_model.predict(features_for_prediction)
-        predicted_class = np.argmax(prediction, axis=1)[0]
-        
-        if predicted_class == 0:
-            return "Cognitive State: IMPAIRED"
-        else:
-            return "Cognitive State: HEALTHY"
-    
-    return "Not enough data for AI prediction."
 
 
 
@@ -829,49 +789,29 @@ def save_weekly_summary(patient_name, week_number, prediction):
         file.write(f"{week_number},{prediction}\n")
 
 
+def import_existing_data_and_generate_report(patient_name, folder_path):
+    import shutil
 
+    patient_folder = f"deterministic_model_test/{patient_name}"
+    os.makedirs(patient_folder, exist_ok=True)
 
+    # Copy all CSVs
+    for file in os.listdir(folder_path):
+        if file.endswith(".csv"):
+            src = os.path.join(folder_path, file)
+            dst = os.path.join(patient_folder, file)
+            if not os.path.exists(dst):
+                shutil.copy(src, dst)
 
+    print(f"[INFO] Imported {len(os.listdir(folder_path))} CSV files into {patient_folder}")
 
-
-
-if __name__ == "__main__":
-   
-    while True:
-        patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
-
-        if patient_name.lower() == "list":
-            existing_patients = os.listdir("deterministic_model_test")
-            if existing_patients:
-                print("Existing patient records:", ", ".join(existing_patients))
-            else:
-                print("No existing patient records found.")
-            continue
-
-        if patient_name:
-            patient_folder = f"deterministic_model_test/{patient_name}"
-            if os.path.exists(patient_folder):
-                print(f"Continuing tracking for existing patient: {patient_name}")
-            else:
-                print(f"Creating new tracking folder for patient: {patient_name}")
-            break
-        else:
-            print("Error: Patient name cannot be empty.")
-
-    # 🧠 Run tracking for the current session
-    track_eye_activity(patient_name, tracking_duration=10)
-
-    # 📈 After at least 7 sessions:
-    if len([f for f in os.listdir(f"deterministic_model_test/{patient_name}") if f.endswith(".csv")]) >= 7:
-
-        # 1️⃣ Run deterministic prediction
+    # --- After importing files
+    num_csv = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")])
+    if num_csv >= 7:
         deterministic_prediction = check_weekly_prediction(patient_name)
-
-        # 2️⃣ Plot weekly graphs
         plot_weekly_speed_trend(patient_name)
 
-        # 3️⃣ Run AI prediction
-        ai_prediction = None
+        # 🧠 Instead of calling run_ai_model_on_week, do it manually:
         all_data = []
         for file in sorted(os.listdir(patient_folder)):
             if file.endswith(".csv"):
@@ -887,31 +827,121 @@ if __name__ == "__main__":
 
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
-            if len(combined_df) >= 1:  # ✅ take whole file now
-                features = combined_df.values
-                features_for_prediction = np.expand_dims(features, axis=0)
-                prediction = cognitive_model.predict(features_for_prediction)
-                predicted_class = np.argmax(prediction, axis=1)[0]
-                ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
-            else:
-                ai_prediction = "Not enough data for AI model"
+            features = combined_df.values
+            features_for_prediction = np.expand_dims(features, axis=0)
+            prediction = cognitive_model.predict(features_for_prediction)
+            predicted_class = np.argmax(prediction, axis=1)[0]
+            ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
         else:
-            ai_prediction = "No valid data for AI model"
+            ai_prediction = "Not enough data for AI model"
 
-        # 4️⃣ Generate PDF Report
-        week_number = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) // 7
+        # Debug prints
+        print("[DEBUG] Deterministic Prediction:", deterministic_prediction)
+        print("[DEBUG] AI Prediction:", ai_prediction)
+
+        week_number = num_csv // 7
+
         if deterministic_prediction is not None and ai_prediction is not None:
             generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
-    
-            # 🆕 ADD THIS LINE
             save_weekly_summary(patient_name, week_number, deterministic_prediction)
+        else:
+            print("[WARNING] Predictions incomplete. Skipping PDF generation.")
+
+    # After saving weekly summary, check if 4 weeks done
+    if num_csv >= 28:
+        generate_monthly_report(patient_name)
+
+
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    while True:
+        print("\nWhat would you like to do?")
+        print("1. Run New Test (using webcam)")
+        print("2. Import Folder of CSV Files and Generate Report")
+        print("3. Exit Program")
+
+        choice = input("Enter your choice (1/2/3): ").strip()
+
+        if choice == "1":
+            # 🧠 RUN NEW TEST
+            patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
+
+            if patient_name.lower() == "list":
+                existing_patients = os.listdir("deterministic_model_test")
+                if existing_patients:
+                    print("Existing patient records:", ", ".join(existing_patients))
+                else:
+                    print("No existing patient records found.")
+                continue
+
+            if patient_name:
+                patient_folder = f"deterministic_model_test/{patient_name}"
+                if not os.path.exists(patient_folder):
+                    print(f"Creating new tracking folder for patient: {patient_name}")
+                else:
+                    print(f"Continuing tracking for existing patient: {patient_name}")
+
+                track_eye_activity(patient_name, tracking_duration=10)
+
+                # 📈 AFTER 7 CSVs
+                if len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) >= 7:
+                    deterministic_prediction = check_weekly_prediction(patient_name)
+                    plot_weekly_speed_trend(patient_name)
+
+                    # 🧠 AI Prediction (fixed here)
+                    all_data = []
+                    for file in sorted(os.listdir(patient_folder)):
+                        if file.endswith(".csv"):
+                            df = pd.read_csv(os.path.join(patient_folder, file))
+                            required_columns = [
+                                'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
+                                'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
+                                'fixation_duration', 'Blink_Count', 'Blink_Duration',
+                                'Saccade_Count', 'Saccade_Duration'
+                            ]
+                            if all(col in df.columns for col in required_columns):
+                                all_data.append(df[required_columns])
+
+                    if all_data:
+                        combined_df = pd.concat(all_data, ignore_index=True)
+                        features = combined_df.values
+                        features_for_prediction = np.expand_dims(features, axis=0)
+                        prediction = cognitive_model.predict(features_for_prediction)
+                        predicted_class = np.argmax(prediction, axis=1)[0]
+                        ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
+                    else:
+                        ai_prediction = "Not enough data for AI model"
+
+                    # 📄 Generate PDF report
+                    week_number = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) // 7
+                    if deterministic_prediction is not None and ai_prediction is not None:
+                        generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
+                        save_weekly_summary(patient_name, week_number, deterministic_prediction)
+
+                    if len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) >= 28:
+                        generate_monthly_report(patient_name)
+            else:
+                print("Error: Patient name cannot be empty.")
+
+        elif choice == "2":
+            # 📂 IMPORT CSV FILES
+            folder_to_import = input("Enter path to folder containing CSV files: ").strip()
+            target_patient_name = input("Enter target patient name: ").strip()
+
+            import_existing_data_and_generate_report(target_patient_name, folder_to_import)
+
+        elif choice == "3":
+            print("Exiting program. Goodbye!")
+            break
 
         else:
-            print("[WARNING] Skipping PDF generation because predictions are incomplete.")
-
-        # After saving summary, check for 4 weeks
-        if len([f for f in os.listdir(f"deterministic_model_test/{patient_name}") if f.endswith(".csv")]) >= 28:
-            generate_monthly_report(patient_name)
+            print("Invalid choice. Please select 1, 2, or 3.")
 
 
 
