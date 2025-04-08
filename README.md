@@ -172,3 +172,6 @@ If the detection of your pupils is not completely optimal, you can send me a vid
 ## Licensing
 
 This project is released by Antoine Lamé under the terms of the MIT Open Source License. View LICENSE for more information.
+
+
+# month file is ai generated for efficiency

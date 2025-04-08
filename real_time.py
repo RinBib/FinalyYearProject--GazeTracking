@@ -485,8 +485,11 @@ def track_eye_activity(patient_name, tracking_duration=10):
     print(f"Speed test completed. Data saved to {log_file}")
 
 
+# deterministic algorithm
+def check_weekly_prediction(patient_name, min_data_points=30, min_fixations=20, min_blinks=10): #min_saccades=5):
 
-def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50, min_blinks=20, min_saccades=10):
+    
+
     folder_path = f"deterministic_model_test/{patient_name}"
     files = sorted([f for f in os.listdir(folder_path) if f.endswith(".csv")])
 
@@ -495,58 +498,96 @@ def check_weekly_prediction(patient_name, min_data_points=100, min_fixations=50,
         return "Not enough data for deterministic prediction."
 
     speeds, fixations, blink_frequencies, blink_durations = [], [], [], []
-    saccade_counts, saccade_durations = [], []
+    #saccade_counts, saccade_durations = [], []
     total_data_points, total_fixations, total_blinks, total_saccades = 0, 0, 0, 0
 
-    for file in files[-7:]:  
+    for file in files[-7:]:
         df = pd.read_csv(os.path.join(folder_path, file))
+
         valid_speeds = df["Speed_mm_per_sec"].dropna().tolist()
-        
-        # FIXATION
         valid_fixations = df["Fixation_Detected"].dropna().sum()
         valid_blink_freqs = df["Blink_Count"].dropna().tolist()
         valid_blink_durations = df["Blink_Duration"].dropna().tolist()
-        valid_saccade_counts = df["Saccade_Count"].dropna().tolist()
-        valid_saccade_durations = df["Saccade_Duration"].dropna().tolist()
-        
+        #valid_saccade_counts = df["Saccade_Count"].dropna().tolist()
+        #valid_saccade_durations = df["Saccade_Duration"].dropna().tolist()
+
         speeds.extend(valid_speeds)
         fixations.append(valid_fixations)
         blink_frequencies.extend(valid_blink_freqs)
         blink_durations.extend(valid_blink_durations)
-        saccade_counts.extend(valid_saccade_counts)
-        saccade_durations.extend(valid_saccade_durations)
-        
+        #saccade_counts.extend(valid_saccade_counts)
+        #saccade_durations.extend(valid_saccade_durations)
+
         total_data_points += len(valid_speeds)
         total_fixations += valid_fixations
         total_blinks += len(valid_blink_durations)
-        total_saccades += len(valid_saccade_counts)
+        #total_saccades += len(valid_saccade_counts)
 
-    # 🔥 FIX THIS AREA 🔥
-    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7 or total_saccades < min_saccades * 7:
-        print(f"Not enough data for {patient_name}. Only {total_data_points}/{min_data_points * 7}, {total_fixations}/{min_fixations * 7} fixations, {total_blinks}/{min_blinks * 7} blinks, {total_saccades}/{min_saccades * 7} saccades collected.")
+    # Check if enough data collected
+    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7: # or total_saccades #< min_saccades * 7:
+        print(f"Not enough data collected for {patient_name}.")
         return "Not enough data for deterministic prediction."
 
-    # If enough data, make prediction
+    # Calculate averages
     avg_speed = np.mean(speeds)
     avg_fixations = np.mean(fixations)
     avg_blink_freq = np.mean(blink_frequencies)
     avg_blink_duration = np.mean(blink_durations)
-    avg_saccade_count = np.mean(saccade_counts)
-    avg_saccade_duration = np.mean(saccade_durations)
+    #avg_saccade_count = np.mean(saccade_counts)
+    #avg_saccade_duration = np.mean(saccade_durations)
 
-    if avg_speed < 5 and avg_fixations < 50 and avg_blink_freq < 0.2 and avg_blink_duration > 400 and avg_saccade_count < 5:
-        prediction = "Possible Fatigue / Drowsiness"
-    elif 5 <= avg_speed <= 20 and avg_fixations >= 50 and 0.2 <= avg_blink_freq <= 0.5 and 200 <= avg_blink_duration <= 300 and 5 <= avg_saccade_count <= 20:
-        prediction = "Normal Eye Movement"
-    elif avg_speed > 20 or avg_fixations > 100 or avg_blink_freq > 0.5 and avg_blink_duration < 200 or avg_saccade_count > 20:
-        prediction = "Possible Attention Deficit / High Cognitive Load"
-    elif avg_blink_duration > 500 or avg_saccade_count < 3:
-        prediction = "Possible Neurological Disorder (Check Medical Attention)"
+    # --- Check Each Feature Individually ---
+    healthy_features = 0
+    total_features = 4
+
+    print("\n===== Feature-by-Feature Health Check =====")
+
+    # Blink Rate (blinks per second)
+    if 0.2 <= avg_blink_freq <= 0.5:
+        healthy_features += 1
+        print("Blink Rate: Healthy ")
     else:
-        prediction = "Possible Restlessness / Attention Issues"
+        print("Blink Rate: Abnormal ")
 
-    print(f"Prediction for {patient_name} after 7 days: {prediction}")
+    # Blink Duration (ms)
+    if 200 <= avg_blink_duration <= 300:
+        healthy_features += 1
+        print("Blink Duration: Healthy ")
+    else:
+        print("Blink Duration: Abnormal ")
+
+    # Speed (mm/sec)
+    if 5 <= avg_speed <= 20:
+        healthy_features += 1
+        print("Speed: Healthy ")
+    else:
+        print("Speed: Abnormal ")
+
+    # Fixations (number per session)
+    if avg_fixations >= 50:
+        healthy_features += 1
+        print("Fixation Count: Healthy ")
+    else:
+        print("Fixation Count: Abnormal ")
+
+    # Saccades (number per session)
+    #if 5 <= avg_saccade_count <= 20:
+        #healthy_features += 1
+        #print("Saccade Count: Healthy ")
+    #else:
+        #print("Saccade Count: Abnormal ")
+
+    # ===== Majority Voting =====
+    print(f"\nHealthy Features: {healthy_features}/{total_features}")
+
+    if healthy_features >= 2:
+        prediction = "Normal Eye Movement (Healthy)"
+    else:
+        prediction = "Possible Cognitive Impairment (Check Attention / Fatigue / Neurology)"
+
+    print(f"\nFINAL DETERMINISTIC PREDICTION: {prediction}")
     return prediction
+
 
 
 
@@ -603,7 +644,7 @@ def plot_weekly_speed_trend(patient_name):
     # Save & Show Graph
     graph_path = f"{folder_path}/{patient_name}_weekly_speed_trend.png"
     plt.savefig(graph_path)
-    plt.show()
+    #plt.show()
 
     # Fixation Plot
     plt.figure(figsize=(8, 5))
@@ -611,12 +652,12 @@ def plot_weekly_speed_trend(patient_name):
     plt.xlabel("Day Number")
     plt.ylabel("Fixations Count")
     plt.title(f"Fixation Trend Over 7 Days - {patient_name}")
-    plt.grid(True)
+    #plt.grid(True)
      # Save & Show Graph
     graph_path = f"{folder_path}/{patient_name}_weekly_fixation_trend.png"
     plt.savefig(graph_path)
     plt.legend()
-    plt.show()
+    #plt.show()
     
     
     
@@ -632,7 +673,7 @@ def plot_weekly_speed_trend(patient_name):
     graph_path = f"{folder_path}/{patient_name}_blinking_frequency_trend.png"
     plt.savefig(graph_path)
     
-    plt.show()
+    #plt.show()
 
     #  BLINK DURATION TREND PLOT
     plt.figure(figsize=(8, 5))
@@ -646,7 +687,7 @@ def plot_weekly_speed_trend(patient_name):
     graph_path = f"{folder_path}/{patient_name}_blink_duration_trend.png"
     plt.savefig(graph_path)
     
-    plt.show()
+    #plt.show()
 
 #  PLOT SACCADE COUNT TREND (NEW!)
     plt.figure(figsize=(8, 5))
@@ -659,7 +700,7 @@ def plot_weekly_speed_trend(patient_name):
     graph_path = f"{folder_path}/{patient_name}_saccade_count_trend.png"
     plt.savefig(graph_path)
     
-    plt.show()
+    #plt.show()
 
     #  PLOT SACCADE DURATION TREND (NEW!)
     plt.figure(figsize=(8, 5))
@@ -672,7 +713,7 @@ def plot_weekly_speed_trend(patient_name):
     graph_path = f"{folder_path}/{patient_name}_saccade_duration_trend.png"
     plt.savefig(graph_path)
     
-    plt.show()
+    #plt.show()
 
 
 
