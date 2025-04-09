@@ -1,23 +1,25 @@
+# pyright: reportMissingImports=false
+# pyright: reportMissingModuleSource=false
 import pandas as pd
 import numpy as np
 import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from CNN_LSTM_model import create_cnn_lstm_model
-
+import joblib
 
 # Load your CSV files containing gaze data from impaired and healthy subjects
 # # demented subject
 john_df = pd.read_csv("cleaned_extracted_data\john_cleaned_combined.csv") 
  # healthy subject
-evangel_df = pd.read_csv("cleaned_extracted_data\evangeline_cleaned_combined.csv") 
+cat_df = pd.read_csv("cleaned_extracted_data\cat_cleaned_combined.csv") 
 
 # Add labels for classification (supervised learning)
 john_df["label"] = "impaired"
-evangel_df["label"] = "healthy"
+cat_df["label"] = "healthy"
 
 # Combine the datasets and shuffle 
-data_df = pd.concat([john_df, evangel_df], ignore_index=True)
+data_df = pd.concat([john_df, cat_df], ignore_index=True)
 # Drop missing data and shuffle
 data_df = data_df.dropna().sample(frac=1).reset_index(drop=True) 
 
@@ -26,9 +28,8 @@ data_df = data_df.dropna().sample(frac=1).reset_index(drop=True)
 features = [
     'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
     'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
-    'fixation_duration', 'Blink_Count', 'Blink_Duration',
-    'Saccade_Count', 'Saccade_Duration'
-]
+    'fixation_duration', 'Blink_Count', 'Blink_Duration']
+    #'Saccade_Count', 'Saccade_Duration']
 
 # Extract feature values and label column
 df_features = data_df[features]
@@ -44,6 +45,9 @@ y_encoded = label_encoder.fit_transform(y)
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
+# After training
+joblib.dump(scaler, 'scaler.pkl')
+print("Scaler saved as scaler.pkl")
 # Segment the gaze data into sequences for LSTM input
 # Each sequence will contain 20 consecutive frames 
 # 20 frames at 30 FPS = 0.6 seconds of tracking
@@ -74,3 +78,8 @@ model.fit(
 # Save the trained model as an HDF5 file for later use
 model.save("cognitive_classifier_model.h5")
 print("Model trained and saved as cognitive_classifier_model.h5")
+
+loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
+print(f"\n Test Accuracy: {accuracy * 100:.2f}%")
+
+

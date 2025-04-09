@@ -14,6 +14,8 @@ import dlib
 from gaze_tracking import GazeTracking
 from gaze_tracking.fixation import FixationDetector
 from fpdf import FPDF
+import shutil
+import joblib
 
 from tensorflow.keras.models import load_model
 
@@ -766,7 +768,7 @@ def generate_monthly_report(patient_name):
         print("[INFO] Not enough weeks (4) completed for monthly report.")
         return
 
-    from fpdf import FPDF
+    
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     pdf = FPDF()
@@ -831,7 +833,7 @@ def save_weekly_summary(patient_name, week_number, prediction):
 
 
 def import_existing_data_and_generate_report(patient_name, folder_path):
-    import shutil
+    
 
     patient_folder = f"deterministic_model_test/{patient_name}"
     os.makedirs(patient_folder, exist_ok=True)
@@ -868,7 +870,17 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
 
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
+            # 🛠️ Keep only important features (no saccades)
+            selected_features = [
+                'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
+                'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
+                'fixation_duration', 'Blink_Count', 'Blink_Duration'
+            ]
+            combined_df = combined_df[selected_features]
+            #  Load the saved scaler
+            scaler = joblib.load('scaler.pkl')
             features = combined_df.values
+            features_scaled = scaler.transform(features)
             features_for_prediction = np.expand_dims(features, axis=0)
             prediction = cognitive_model.predict(features_for_prediction)
             predicted_class = np.argmax(prediction, axis=1)[0]
@@ -879,6 +891,7 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
         # Debug prints
         print("[DEBUG] Deterministic Prediction:", deterministic_prediction)
         print("[DEBUG] AI Prediction:", ai_prediction)
+        
 
         week_number = num_csv // 7
 
@@ -910,7 +923,7 @@ if __name__ == "__main__":
         choice = input("Enter your choice (1/2/3): ").strip()
 
         if choice == "1":
-            # 🧠 RUN NEW TEST
+            #  RUN NEW TEST
             patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
 
             if patient_name.lower() == "list":
@@ -930,12 +943,12 @@ if __name__ == "__main__":
 
                 track_eye_activity(patient_name, tracking_duration=10)
 
-                # 📈 AFTER 7 CSVs
+                #  AFTER 7 CSVs
                 if len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) >= 7:
                     deterministic_prediction = check_weekly_prediction(patient_name)
                     plot_weekly_speed_trend(patient_name)
 
-                    # 🧠 AI Prediction (fixed here)
+                    #  AI Prediction
                     all_data = []
                     for file in sorted(os.listdir(patient_folder)):
                         if file.endswith(".csv"):
@@ -951,7 +964,16 @@ if __name__ == "__main__":
 
                     if all_data:
                         combined_df = pd.concat(all_data, ignore_index=True)
+                        # 🛠️ Select only the 10 important features (no saccades)
+                        selected_features = [
+                            'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
+                            'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
+                            'fixation_duration', 'Blink_Count', 'Blink_Duration'
+                        ]
+                        combined_df = combined_df[selected_features]
+                        scaler = joblib.load('scaler.pkl')
                         features = combined_df.values
+                        features_scaled = scaler.transform(features)
                         features_for_prediction = np.expand_dims(features, axis=0)
                         prediction = cognitive_model.predict(features_for_prediction)
                         predicted_class = np.argmax(prediction, axis=1)[0]

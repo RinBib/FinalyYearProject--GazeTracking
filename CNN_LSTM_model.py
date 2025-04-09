@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 # Define the CNN + LSTM model
-def create_cnn_lstm_model(window_size=20, num_features=12):
+def create_cnn_lstm_model(window_size=20, num_features=10):
     model = tf.keras.Sequential([
         tf.keras.layers.Conv1D(64, kernel_size=3, activation='relu', input_shape=(window_size, num_features)),
         tf.keras.layers.MaxPooling1D(pool_size=2),
