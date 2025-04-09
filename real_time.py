@@ -506,6 +506,13 @@ def check_weekly_prediction(patient_name, min_data_points=30, min_fixations=20, 
     for file in files[-7:]:
         df = pd.read_csv(os.path.join(folder_path, file))
 
+
+        # 🛡️ Add this check to avoid crashing!
+        required_cols = ['Speed_mm_per_sec', 'Fixation_Detected', 'Blink_Count', 'Blink_Duration']
+        if not all(col in df.columns for col in required_cols):
+            print(f"[WARNING] Skipping file {file} because missing important columns.")
+            continue  # Skip bad file
+        
         valid_speeds = df["Speed_mm_per_sec"].dropna().tolist()
         valid_fixations = df["Fixation_Detected"].dropna().sum()
         valid_blink_freqs = df["Blink_Count"].dropna().tolist()
@@ -610,26 +617,39 @@ def plot_weekly_speed_trend(patient_name):
         print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
         return
 
-    day_numbers = list(range(1, 8))
-    avg_speeds, avg_fixations, avg_blink_freq, avg_blink_duration, avg_saccade_count, avg_saccade_duration = [], [], [], [], [], []
+    day_numbers = []
+    avg_speeds = []
+    avg_fixations = []
+    avg_blink_freq = []
+    avg_blink_duration = []
+    #avg_saccade_count = []
+    #avg_saccade_duration = []
 
-    for file in files[-7:]:  # Get the last 7 files
+
+    for idx, file in enumerate(files[-7:]):
         df = pd.read_csv(os.path.join(folder_path, file))
-        #  Compute the correct values
-        avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())  # Average speed
-        avg_fixation = df["Fixation_Detected"].dropna().sum()  # Total fixations in session
-        avg_blink_f = np.mean(df["Blink_Count"].dropna())  # Average blink frequency
-        avg_blink_d = np.mean(df["Blink_Duration"].dropna())  # Average blink duration
-        avg_saccade_c = np.mean(df["Saccade_Count"].dropna())  # Average saccade count
-        avg_saccade_d = np.mean(df["Saccade_Duration"].dropna())  # Average saccade duration
 
-        #  Append the values to the lists
+        required_cols = ['Speed_mm_per_sec', 'Fixation_Detected', 'Blink_Count', 'Blink_Duration']
+        if not all(col in df.columns for col in required_cols):
+            print(f"[WARNING] Skipping {file} because it is missing important columns.")
+            continue  # Skip this bad file
+
+        avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())
+        avg_fixation = df["Fixation_Detected"].dropna().sum()
+        avg_blink_f = np.mean(df["Blink_Count"].dropna())
+        avg_blink_d = np.mean(df["Blink_Duration"].dropna())
+        # optional if you still want to include saccade trends
+        #avg_saccade_c = np.mean(df["Saccade_Count"].dropna()) if "Saccade_Count" in df.columns else np.nan
+        #avg_saccade_d = np.mean(df["Saccade_Duration"].dropna()) if "Saccade_Duration" in df.columns else np.nan
+
         avg_speeds.append(avg_speed)
-        avg_fixations.append(avg_fixation)  
-        avg_blink_freq.append(avg_blink_f)    
-        avg_blink_duration.append(avg_blink_d)    
-        avg_saccade_count.append(avg_saccade_c)  
-        avg_saccade_duration.append(avg_saccade_d)  
+        avg_fixations.append(avg_fixation)
+        avg_blink_freq.append(avg_blink_f)
+        avg_blink_duration.append(avg_blink_d)
+        #avg_saccade_count.append(avg_saccade_c)
+        #avg_saccade_duration.append(avg_saccade_d)
+        day_numbers.append(idx + 1)
+ 
         
     # Generate speed Plot
     plt.figure(figsize=(8, 5))
@@ -692,28 +712,28 @@ def plot_weekly_speed_trend(patient_name):
     #plt.show()
 
 #  PLOT SACCADE COUNT TREND (NEW!)
-    plt.figure(figsize=(8, 5))
-    plt.plot(day_numbers, avg_saccade_count, marker='*', linestyle='-', color='orange', label="Saccade Count")
-    plt.xlabel("Day Number")
-    plt.ylabel("Saccades per Session")
-    plt.title(f"Saccade Count Trend Over 7 Days - {patient_name}")
-    plt.legend()
-    plt.grid(True)
-    graph_path = f"{folder_path}/{patient_name}_saccade_count_trend.png"
-    plt.savefig(graph_path)
+    #plt.figure(figsize=(8, 5))
+    #plt.plot(day_numbers, avg_saccade_count, marker='*', linestyle='-', color='orange', label="Saccade Count")
+    #plt.xlabel("Day Number")
+    #plt.ylabel("Saccades per Session")
+    #plt.title(f"Saccade Count Trend Over 7 Days - {patient_name}")
+    #plt.legend()
+    #plt.grid(True)
+    #graph_path = f"{folder_path}/{patient_name}_saccade_count_trend.png"
+    #plt.savefig(graph_path)
     
     #plt.show()
 
     #  PLOT SACCADE DURATION TREND (NEW!)
-    plt.figure(figsize=(8, 5))
-    plt.plot(day_numbers, avg_saccade_duration, marker='h', linestyle='-', color='brown', label="Saccade Duration (ms)")
-    plt.xlabel("Day Number")
-    plt.ylabel("Saccade Duration (ms)")
-    plt.title(f"Saccade Duration Trend Over 7 Days - {patient_name}")
-    plt.legend()
-    plt.grid(True)
-    graph_path = f"{folder_path}/{patient_name}_saccade_duration_trend.png"
-    plt.savefig(graph_path)
+    #plt.figure(figsize=(8, 5))
+    #plt.plot(day_numbers, avg_saccade_duration, marker='h', linestyle='-', color='brown', label="Saccade Duration (ms)")
+    #plt.xlabel("Day Number")
+    #plt.ylabel("Saccade Duration (ms)")
+    #plt.title(f"Saccade Duration Trend Over 7 Days - {patient_name}")
+    #plt.legend()
+    #plt.grid(True)
+    #graph_path = f"{folder_path}/{patient_name}_saccade_duration_trend.png"
+    #plt.savefig(graph_path)
     
     #plt.show()
 
@@ -862,11 +882,16 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
                 required_columns = [
                     'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
                     'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
-                    'fixation_duration', 'Blink_Count', 'Blink_Duration',
-                    'Saccade_Count', 'Saccade_Duration'
-                ]
-                if all(col in df.columns for col in required_columns):
+                    'fixation_duration', 'Blink_Count', 'Blink_Duration']
+                    #'Saccade_Count', 'Saccade_Duration'
+                
+                missing_cols = [col for col in required_columns if col not in df.columns]
+
+                if missing_cols:
+                    print(f"[WARNING] Skipping {file} because missing columns: {missing_cols}")
+                else:
                     all_data.append(df[required_columns])
+
 
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)

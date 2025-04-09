@@ -5,7 +5,10 @@ import glob
 file_paths = sorted(#glob.glob("deterministic_model_test/cat3/cat3_speed_test_*.csv") +
                     #glob.glob("deterministic_model_test/cat4/cat4_speed_test_*.csv") +
                     glob.glob("deterministic_model_test/cat3/cat3_speed_test_*.csv") + 
-                    glob.glob("deterministic_model_test/cat4/cat4_speed_test_*.csv"))
+                    glob.glob("deterministic_model_test/cat4/cat4_speed_test_*.csv") +
+                    glob.glob("deterministic_model_test/algo_test/algo_test_w*_d*.csv") +
+                    glob.glob("deterministic_model_test/algo_test_1/algo_test_1_w*_d*.csv.csv")
+                    )
 
 print("Files found:", file_paths)
 
