@@ -2,17 +2,23 @@
 # pyright: reportMissingModuleSource=false
 import pandas as pd
 import numpy as np
-import tensorflow as tf
-from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
-from CNN_LSTM_model import create_cnn_lstm_model
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 import joblib
+from sklearn.metrics import classification_report
 
+
+model = LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42)
 # Load your CSV files containing gaze data from impaired and healthy subjects
 # # demented subject
 john_df = pd.read_csv("cleaned_extracted_data\john_cleaned_combined.csv") 
  # healthy subject
 cat_df = pd.read_csv("cleaned_extracted_data\cat_cleaned_combined.csv") 
+
+
+
 
 # Add labels for classification (supervised learning)
 john_df["label"] = "impaired"
@@ -31,55 +37,37 @@ features = [
     'fixation_duration', 'Blink_Count', 'Blink_Duration']
     #'Saccade_Count', 'Saccade_Duration']
 
-# Extract feature values and label column
-df_features = data_df[features]
-X = df_features.values  
+X = data_df[features].values
 y = data_df['label'].values
 
-# Convert text labels to binary 
+# 5. Encode labels
 label_encoder = LabelEncoder()
-y_encoded = label_encoder.fit_transform(y)
+y_encoded = label_encoder.fit_transform(y)  # 0 = impaired, 1 = healthy
 
-# Normalize all input features using standard scaling (mean=0, std=1)
-# This is very important for neural networks to converge properly
+# 6. Scale features
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
-# After training
-joblib.dump(scaler, 'scaler.pkl')
-print("Scaler saved as scaler.pkl")
-# Segment the gaze data into sequences for LSTM input
-# Each sequence will contain 20 consecutive frames 
-# 20 frames at 30 FPS = 0.6 seconds of tracking
-# This is long enough to capture temporal patterns like fixations, blinks, or saccades
-# 10–30 time steps is good for short behavioral sequences in LSTMs
-window_size = 20
-X_seq = np.array([X_scaled[i:i+window_size] for i in range(len(X_scaled) - window_size + 1)])
-y_seq = np.array([y_encoded[i + window_size - 1] for i in range(len(X_scaled) - window_size + 1)])
+# 7. Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded)
 
-# Split into training and testing sets 80 20
-X_train, X_test, y_train, y_test = train_test_split(X_seq, y_seq, test_size=0.2, random_state=42)
+model = LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42)
+model.fit(X_train, y_train)
 
-# Create the model
-model = create_cnn_lstm_model(window_size=window_size, num_features=len(features))
+# 9. model
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print(f" Random Forest Test Accuracy: {accuracy * 100:.2f}%")
 
-model.summary()  # Show model architecture
-
-# Train the model for 20 epochs using batch size of 32
-# You can increase epochs if needed for better results
-model.fit(
-    X_train, y_train,
-    validation_data=(X_test, y_test),
-    epochs=20,
-    batch_size=32,
-    verbose=1
-)
-
-# Save the trained model as an HDF5 file for later use
-model.save("cognitive_classifier_model.h5")
-print("Model trained and saved as cognitive_classifier_model.h5")
-
-loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
-print(f"\n Test Accuracy: {accuracy * 100:.2f}%")
+# 10. Save the model and scaler
+joblib.dump(model, "model.joblib")
+joblib.dump(scaler, "scaler.pkl")
+print(" Model saved as model.joblib and scaler.pkl")
 
 
+
+# Load your test features and labels (not new real-world data — use training or validation data)
+X_test_scaled = scaler.transform(X_test)
+y_pred = model.predict(X_test_scaled)  
+
+print(classification_report(y_test, y_pred))

@@ -17,11 +17,13 @@ from fpdf import FPDF
 import shutil
 import joblib
 
-from tensorflow.keras.models import load_model
+ # Load the Random Forest model
+cognitive_model = joblib.load('logistic_model.joblib') 
+scaler = joblib.load('scaler.pkl')  
 
 
-# Load the trained model
-cognitive_model = load_model("cognitive_classifier_model.h5")
+
+
 
 # Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -39,7 +41,7 @@ SAFE_ZONE = (200, 100, 440, 380)
 
 SACCADE_VELOCITY_THRESHOLD = 3.0# deg/sec (Adjust this based on research)
 SACCADE_DURATION_THRESHOLD = 50  # ms (Average duration of a saccade)
-SACCADE_MIN_DURATION = 180  # ✅ Ensure only real saccades are counted
+SACCADE_MIN_DURATION = 180  # Ensure only real saccades are counted
 
 # Constants for real-world conversion
 DPI = 96  
@@ -507,7 +509,7 @@ def check_weekly_prediction(patient_name, min_data_points=30, min_fixations=20, 
         df = pd.read_csv(os.path.join(folder_path, file))
 
 
-        # 🛡️ Add this check to avoid crashing!
+        # Add this check to avoid crashing!
         required_cols = ['Speed_mm_per_sec', 'Fixation_Detected', 'Blink_Count', 'Blink_Duration']
         if not all(col in df.columns for col in required_cols):
             print(f"[WARNING] Skipping file {file} because missing important columns.")
@@ -874,7 +876,7 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
         deterministic_prediction = check_weekly_prediction(patient_name)
         plot_weekly_speed_trend(patient_name)
 
-        # 🧠 Instead of calling run_ai_model_on_week, do it manually:
+        # Instead of calling run_ai_model_on_week, do it manually:
         all_data = []
         for file in sorted(os.listdir(patient_folder)):
             if file.endswith(".csv"):
@@ -895,7 +897,7 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
 
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
-            # 🛠️ Keep only important features (no saccades)
+            #  Keep only important features (no saccades)
             selected_features = [
                 'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
                 'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
@@ -905,13 +907,13 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
             #  Load the saved scaler
             scaler = joblib.load('scaler.pkl')
             features = combined_df.values
+            
             features_scaled = scaler.transform(features)
-            features_for_prediction = np.expand_dims(features, axis=0)
-            prediction = cognitive_model.predict(features_for_prediction)
-            predicted_class = np.argmax(prediction, axis=1)[0]
+            
+            prediction = cognitive_model.predict(features_scaled)
+            predicted_class = int(prediction[0])
             ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
-        else:
-            ai_prediction = "Not enough data for AI model"
+
 
         # Debug prints
         print("[DEBUG] Deterministic Prediction:", deterministic_prediction)
@@ -998,13 +1000,12 @@ if __name__ == "__main__":
                         combined_df = combined_df[selected_features]
                         scaler = joblib.load('scaler.pkl')
                         features = combined_df.values
+                        
                         features_scaled = scaler.transform(features)
-                        features_for_prediction = np.expand_dims(features, axis=0)
-                        prediction = cognitive_model.predict(features_for_prediction)
-                        predicted_class = np.argmax(prediction, axis=1)[0]
+                        prediction = cognitive_model.predict(features_scaled)
+                        predicted_class = int(prediction[0])
                         ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
-                    else:
-                        ai_prediction = "Not enough data for AI model"
+
 
                     # 📄 Generate PDF report
                     week_number = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) // 7
@@ -1018,7 +1019,7 @@ if __name__ == "__main__":
                 print("Error: Patient name cannot be empty.")
 
         elif choice == "2":
-            # 📂 IMPORT CSV FILES
+            # IMPORT CSV FILES/PATH
             folder_to_import = input("Enter path to folder containing CSV files: ").strip()
             target_patient_name = input("Enter target patient name: ").strip()
 
