@@ -168,7 +168,7 @@ def get_next_filename(patient_name):
     week_number = (total_days // 7) + 1  # Week number (every 7 days is a new week)
     day_number = (total_days % 7) + 1     # Day number inside the week (1-7)
 
-    # 👇 Create filename using week and day
+    #  Create filename using week and day
     filename = f"{patient_name}_w{week_number}_d{day_number}.csv"
 
     return os.path.join(folder_path, filename)
@@ -1007,7 +1007,7 @@ if __name__ == "__main__":
                         ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
 
 
-                    # 📄 Generate PDF report
+                    #  Generate PDF report
                     week_number = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) // 7
                     if deterministic_prediction is not None and ai_prediction is not None:
                         generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
