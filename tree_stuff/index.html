@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Auto-Download Fractal Tree GIF</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.3.2/gifshot.min.js"></script>
+  <script>
+    const TOTAL_FRAMES = 120;
+    let frames = [];
+
+    function setup() {
+      createCanvas(400, 400);
+      frameRate(30);
+      noLoop();
+      loop();
+    }
+
+    function draw() {
+      background(51);
+      let t = constrain(frameCount, 0, TOTAL_FRAMES) / TOTAL_FRAMES;
+      let angle = lerp(0, TWO_PI, t);
+      translate(width/2, height);
+      stroke(255);
+      branch(angle, 100);
+
+      frames.push(canvas.toDataURL('image/png'));
+
+      if (frameCount >= TOTAL_FRAMES) {
+        noLoop();
+        
+        gifshot.createGIF({
+          images: frames,
+          gifWidth: width,
+          gifHeight: height,
+          interval: 1/30
+        }, obj => {
+          if (!obj.error) {
+            const link = document.createElement('a');
+            link.href = obj.image;
+            link.download = 'fractal-tree.gif';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } else {
+            console.error('gifshot error:', obj.error);
+          }
+        });
+      }
+    }
+
+    function branch(a, len) {
+      line(0, 0, 0, -len);
+      translate(0, -len);
+      if (len > 4) {
+        push(); rotate(a); branch(a, len * 0.67); pop();
+        push(); rotate(-a); branch(a, len * 0.67); pop();
+      }
+    }
+  </script>
+</head>
+
+</html>
