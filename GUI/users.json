@@ -1,0 +1,10 @@
+{
+  "ew": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$G+S9JPAGBpjezqiX0jc+Zg$cC0HBeScopYwRV8C25gQr4YVbTypBDeNvpY4eSmlcyA",
+    "name": "dew"
+  },
+  "fwe": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$347W5mFmvs13r9cDUBvcCg$h8zwLJtMkfYVd2OHbKjvMXxnlj6LCj5UI85SvmN3piE",
+    "name": "sefwe"
+  }
+}

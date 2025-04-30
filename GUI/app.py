@@ -1,5 +1,8 @@
 import os
 import sys
+import shutil
+from tkinter import filedialog, messagebox
+import pandas as pd
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from PIL import Image, ImageTk, ImageOps, ImageSequence, ImageDraw
@@ -7,6 +10,7 @@ from tkinter import BOTH, X, TOP, LEFT
 import tkinter.font as tkfont
 from auth import register_user, verify_user, get_user_name
 import tkinter as tk
+
 
 
 # allow importing your own modules
@@ -23,13 +27,13 @@ class LoginPage(tb.Frame):
         style = tb.Style()
        
         style.map('Primary.TButton',
-            background=[('active','#0b5ed7'),   # hover
-                        ('pressed','#0a58ca')], # pressed
+            background=[('active','#0b5ed7'),   
+                        ('pressed','#0a58ca')], 
         )
-        # Secondary (Sign Up) button: darker on hover/press
+        # Secondary button
         style.map('Secondary.TButton',
-            background=[('active','#5c636a'),   # hover
-                        ('pressed','#4d5158')], # pressed
+            background=[('active','#5c636a'),   
+                        ('pressed','#4d5158')], 
         )
 
         
@@ -164,7 +168,6 @@ class LoginPage(tb.Frame):
 
 
 
-
 class BasePage(tb.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -174,7 +177,7 @@ class BasePage(tb.Frame):
         style = tb.Style()
         style.configure(
             'TransparentIcon.TButton',
-            background='#0a192f',    # match nav bg
+            background='#0a192f',   
             borderwidth=0,
             relief='flat'
         )
@@ -240,7 +243,7 @@ class HomePage(BasePage):
                      .resize((300,300), Image.LANCZOS)
             self.gif_frames.append(ImageTk.PhotoImage(f))
 
-        # GIF label (inherits TLabel → navy bg)
+        # GIF label 
         self.gif_label = tb.Label(self)
         self.gif_label.pack(pady=(30, 10))
         self.animate_gif(0)
@@ -278,7 +281,7 @@ class InstructionPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
 
-        # 1) Instruction box (left)
+        # Instruction box 
         instr_box = tb.Frame(self,
                              style='Instr.TFrame',
                              width=300, height=200)
@@ -296,8 +299,8 @@ class InstructionPage(BasePage):
                  wraplength=280,
                  justify="left").place(x=10, y=10)
 
-        # 2) Oval + dot images
-        oval_w, oval_h = 200, 300   # tall ellipse
+        # Oval + dot images
+        oval_w, oval_h = 200, 300  
         dot_r = 20
         dot_d = dot_r * 2
         border_w = 4
@@ -329,7 +332,7 @@ class InstructionPage(BasePage):
         ovbox = tb.Frame(self,
                          width=oval_w,
                          height=container_h,
-                         style='TFrame')    # background='#0a192f'
+                         style='TFrame')    
         ovbox.place(relx=0.5, rely=0.5, anchor='center')
 
         # place the dot at the top
@@ -348,7 +351,7 @@ class InstructionPage(BasePage):
         lbl_oval.place(x=0, y=dot_d,
                        width=oval_w, height=oval_h)
 
-        # 3) Begin Test button (right)
+        # Begin Test button 
         btn_w, btn_h = 260, 80
         tb.Button(self,
                   text="Begin Test",
@@ -362,7 +365,7 @@ class InstructionPage(BasePage):
                          height=btn_h)
 
     def _start_test(self):
-        # call your real_time routine
+        # call real_time 
         track_eye_activity("PatientName", tracking_duration=10)
         # then flip to TestPage
         self.controller.show_frame("TestPage")
@@ -372,7 +375,7 @@ class InstructionPage(BasePage):
 class TestPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
-        # Simple placeholder while your real_time.py runs
+        # placeholder
         tb.Label(
             self,
             text="Running the test…",
@@ -384,9 +387,56 @@ class TestPage(BasePage):
 class ImportPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
+
+        # Title
         tb.Label(self,
-                 text="Import Data Page",
-                 font=("Helvetica", 16)).pack(pady=20)
+                 text="Import Existing Data",
+                 font=("Poppins", 16),
+                 foreground="#ccd6f6").pack(pady=(40,10))
+
+        # Description
+        tb.Label(self,
+                 text="Select a folder containing CSV files\n(only .csv will be imported)",
+                 font=("Poppins", 12),
+                 foreground="#ccd6f6",
+                 justify="center").pack(pady=(0,20))
+
+        # Browse button
+        tb.Button(self,
+                  text="Choose Folder…",
+                  bootstyle="primary-outline",
+                  width=20,
+                  command=self._on_browse).pack(pady=10)
+
+        # Feedback label
+        self.msg = tb.Label(self,
+                            text="",
+                            font=("Poppins", 12),
+                            foreground="lightgreen")
+        self.msg.pack(pady=(20,0))
+
+    def _on_browse(self):
+        from tkinter import filedialog, messagebox
+        import os
+        # Ask user for a folder
+        folder = filedialog.askdirectory(title="Select folder with CSV files")
+        if not folder:
+            return
+
+        # Gather CSVs
+        csvs = [f for f in os.listdir(folder) if f.lower().endswith(".csv")]
+        if not csvs:
+            messagebox.showwarning("No CSVs Found",
+                                   "That folder contains no .csv files.")
+            return
+
+        # Run your import + report pipeline
+        user = self.controller.current_user_name or "UnknownUser"
+        import_existing_data_and_generate_report(user, folder)
+
+        # Show confirmation
+        self.msg.config(text=f"Imported {len(csvs)} CSV file(s) for '{user}'")
+
         
 
 
@@ -410,17 +460,34 @@ class EyeTrackingApp(tb.Window):
         self.resizable(False, False)
 
         style = tb.Style()
-        style.configure('TFrame',                        background='#0a192f')
-        style.configure('TLabel',                        background='#0a192f')
-        style.configure('dark.TFrame',                   background='#0a192f')
-        style.configure('dark.TLabel',                   background='#0a192f')
-        style.configure('dark.TButton',                  background='#0a192f')
-        style.configure('inverse-dark.TLabel',           background='#0a192f')
-        style.configure('Outline.Success.TButton',       background='#0a192f')
-        style.configure('Outline.Danger.TButton',        background='#0a192f')
-        style.configure('Instr.TFrame',                  background='#223344')
-        style.configure('OvalBox.TFrame',                background='#273746')
+        style.configure('TFrame',                        background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('TLabel',                        background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('dark.TFrame',                   background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('dark.TLabel',                   background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('dark.TButton',                  background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('inverse-dark.TLabel',           background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('Outline.Success.TButton',       background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('Outline.Danger.TButton',        background='#0a192f', focusthickness=0, focuscolor='')
+        style.configure('Instr.TFrame',                  background='#223344', focusthickness=0, focuscolor='')
+        style.configure('OvalBox.TFrame',                background='#273746', focusthickness=0, focuscolor='')
         style.configure('round-toggle.TCheckbutton', font=('Poppins', 8))
+        
+        style.configure(
+            'Sidebar.TButton',
+            font=('Poppins', 14),         
+            background='#0a192f',         
+            bordercolor='#ccd6f6',        
+            foreground='#ccd6f6',
+            borderwidth=1,
+            relief='flat'
+        )
+        
+        style.map(
+            'Sidebar.TButton',
+            background=[('active', '#0a192f')],     
+            bordercolor=[('active','#ffffff')],     
+            foreground=[('active','#77e4e5')]      
+        )
 
         self.sidebar_visible = False
         self.sidebar_frame = None
@@ -443,6 +510,7 @@ class EyeTrackingApp(tb.Window):
         if self.sidebar_visible:
             self.sidebar_frame.destroy()
         else:
+            # same width/height as before
             self.sidebar_frame = tb.Frame(self, bootstyle="dark")
             self.sidebar_frame.place(
                 x=0, y=50,
@@ -450,30 +518,35 @@ class EyeTrackingApp(tb.Window):
                 height=self.winfo_height() - 50
             )
 
+            
             tb.Label(
                 self.sidebar_frame,
                 text="Menu",
-                font=("Helvetica", 14),
-                bootstyle="inverse-dark",
-                takefocus=False
-            ).pack(fill=X, pady=10)
+                font=("Poppins", 24),
+                foreground="#ccd6f6",
+                background="#0a192f"
+            ).pack(pady=(15, 10))
 
-            for text, action, style_name in [
-                ("Import Data",       lambda: self.show_frame("ImportPage"), "secondary"),
-                ("View Data Folders", self.view_data,                        "secondary"),
-                ("Settings",          lambda: None,                           "secondary"),
-                ("Exit",              self.quit,                              "danger")
+            
+            for text, action in [
+                ("Home",              lambda: self.show_frame("HomePage")),
+                ("Start Test",       lambda: self.show_frame("InstructionPage")),
+                ("Import Data",       lambda: self.show_frame("ImportPage")),
+                ("View Data Files",   self.view_data),
+                ("Settings",          lambda: None),
+                ("About",             lambda: None),
+                ("Log Out",           self.logout),
+                ("Exit",              self.quit)
             ]:
-                lbl = tb.Label(
+                btn = tb.Button(
                     self.sidebar_frame,
                     text=text,
-                    font=("Helvetica", 12),
-                    bootstyle=style_name,
-                    takefocus=False
+                    style='Sidebar.TButton',
+                    takefocus=False,
+                    command=action
                 )
-                lbl.pack(fill=X, pady=5, padx=10)
-                lbl.bind("<Button-1>", lambda e, fn=action: fn())
-                self.add_hover(lbl)
+                
+                btn.pack(fill=X, padx=10, pady=6)
 
         self.sidebar_visible = not self.sidebar_visible
 
@@ -488,6 +561,19 @@ class EyeTrackingApp(tb.Window):
                 bootstyle="danger" if widget.cget("text") == "Exit" else "secondary"
             )
         )
+        
+    def logout(self):
+        # hide the sidebar if it's open
+        if self.sidebar_visible:
+            self.sidebar_frame.destroy()
+            self.sidebar_visible = False
+        # clear user info
+        self.current_user_email = None
+        self.current_user_name  = None
+        self.current_user_display_var.set("")
+        # go back to login
+        self.show_frame("LoginPage")
+
 
 
 
