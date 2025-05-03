@@ -6,14 +6,14 @@ import pandas as pd
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from PIL import Image, ImageTk, ImageOps, ImageSequence, ImageDraw
-from tkinter import BOTH, X, TOP, LEFT
+from tkinter import BOTH, X, TOP, LEFT, RIGHT, END
 import tkinter.font as tkfont
 from auth import register_user, verify_user, get_user_name
+import tkinter.font as tkfont
 import tkinter as tk
 
 
 
-# allow importing your own modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from real_time import track_eye_activity, import_existing_data_and_generate_report
 
@@ -145,9 +145,16 @@ class LoginPage(tb.Frame):
         pw    = self.pw_var.get().strip()
         if verify_user(email, pw):
             name = get_user_name(email)
-            self.controller.current_user_email = email
-            self.controller.current_user_name  = name
+            # store in both the old attrs and your new StringVars
+            self.controller.current_user_email      = email
+            self.controller.current_user_name       = name
+            self.controller.user_email_var.set(email)
+            self.controller.user_name_var.set(name)
             self.controller.current_user_display_var.set(email)
+            self.controller.user_password_var.set(pw)
+
+
+            
             self.msg_var.set("")
             self.controller.show_frame("HomePage")
         else:
@@ -173,7 +180,7 @@ class BasePage(tb.Frame):
         super().__init__(parent)
         self.controller = controller
 
-        # 1) Define a transparent icon-button style
+        
         style = tb.Style()
         style.configure(
             'TransparentIcon.TButton',
@@ -183,15 +190,15 @@ class BasePage(tb.Frame):
         )
         style.map(
             'TransparentIcon.TButton',
-            background=[('active', '#1f2d47')],  # subtle hover shade
+            background=[('active', '#1f2d47')], 
             relief=[('pressed','flat'), ('!pressed','flat')]
         )
 
-        # 2) Nav bar frame (inherits TFrame → #0a192f)
+        
         nav = tb.Frame(self)
         nav.pack(fill=X, side=TOP)
 
-        # 3) Load & invert icons
+        
         burger_img = Image.open("GUI/burger.png") \
                           .resize((30,30)) \
                           .convert("RGBA")
@@ -212,7 +219,7 @@ class BasePage(tb.Frame):
         )
         self.home_img = ImageTk.PhotoImage(home_img)
 
-        # 4) Icon buttons with zero-background style
+        
         btn_menu = tb.Button(
             nav,
             image=self.menu_img,
@@ -404,7 +411,7 @@ class ImportPage(BasePage):
         # Browse button
         tb.Button(self,
                   text="Choose Folder…",
-                  bootstyle="primary-outline",
+                  bootstyle="dark",
                   width=20,
                   command=self._on_browse).pack(pady=10)
 
@@ -416,36 +423,319 @@ class ImportPage(BasePage):
         self.msg.pack(pady=(20,0))
 
     def _on_browse(self):
-        from tkinter import filedialog, messagebox
-        import os
-        # Ask user for a folder
-        folder = filedialog.askdirectory(title="Select folder with CSV files")
+        
+        folder = tk.filedialog.askdirectory(title="Select folder with CSV files")
         if not folder:
             return
 
-        # Gather CSVs
+        
         csvs = [f for f in os.listdir(folder) if f.lower().endswith(".csv")]
         if not csvs:
-            messagebox.showwarning("No CSVs Found",
-                                   "That folder contains no .csv files.")
+            tk.messagebox.showwarning(
+                "No CSVs Found",
+                "That folder contains no .csv files."
+            )
             return
 
-        # Run your import + report pipeline
-        user = self.controller.current_user_name or "UnknownUser"
-        import_existing_data_and_generate_report(user, folder)
+        
+        user = (
+            self.controller.current_user_name
+            or self.controller.current_user_email
+            or "UnknownUser"
+        )
+        target_dir = os.path.join(
+            "deterministic_model_test", user, "imported"
+        )
+        os.makedirs(target_dir, exist_ok=True)
+        for fname in csvs:
+            src = os.path.join(folder, fname)
+            dst = os.path.join(target_dir, fname)
+            if not os.path.exists(dst):
+                shutil.copy(src, dst)
 
-        # Show confirmation
-        self.msg.config(text=f"Imported {len(csvs)} CSV file(s) for '{user}'")
+        
+        self.controller.imported_folder = target_dir
 
+        
+        self.msg.config(text=f"Imported {len(csvs)} file(s) for '{user}'")
+
+        
+        view_page = self.controller.frames["ViewDataPage"]
+        view_page.show_imported_tab()
+
+        
+        
+
+class SettingsPage(BasePage):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+
+        
+        nb = tb.Notebook(self, bootstyle="secondary.TNotebook")
+        nb.pack(fill=BOTH, expand=True, padx=100, pady=100)
+
+        
+        profile_tab = tb.Frame(nb)
+        nb.add(profile_tab, text="Profile")
+        
+         
+        tb.Label(profile_tab,
+                 text="Name:",
+                 font=("Poppins", 12),
+                 foreground="#ccd6f6")\
+          .grid(row=0, column=0, sticky="w", padx=10, pady=(10,5))
+
+        tb.Label(profile_tab,
+                textvariable=controller.user_name_var,
+                font=("Poppins",12,"bold"),
+                foreground="#ffffff")\
+            .grid(row=0, column=1, padx=10, pady=(10,5))
+            
+        
+        
+        tb.Label(profile_tab,
+                 text="Email:",
+                 font=("Poppins", 12),
+                 foreground="#ccd6f6")\
+          .grid(row=1, column=0, sticky="w", padx=10, pady=5)
+              
+
+        tb.Label(profile_tab,
+                textvariable=controller.user_email_var,
+                font=("Poppins",12,"bold"),
+                foreground="#ffffff")\
+            .grid(row=1, column=1, padx=10, pady=5)
+
+
+        
+        tb.Label(profile_tab, text="Password:", font=("Poppins",12), foreground="#ccd6f6")\
+          .grid(row=2, column=0, sticky="w", padx=10, pady=5)
+
+        pwd_entry = tb.Entry(profile_tab,
+                             textvariable=controller.user_password_var,
+                             font=("Poppins",12),
+                             show="*",
+                             state="readonly")
+        pwd_entry.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+
+        def toggle_password():
+            if pwd_entry.cget("show") == "":
+                pwd_entry.config(show="*")
+                btn_toggle.config(text="Show")
+            else:
+                pwd_entry.config(show="")
+                btn_toggle.config(text="Hide")
+
+        btn_toggle = tb.Button(profile_tab,
+                               text="Show",
+                               width=5,
+                               bootstyle="secondary",
+                               command=toggle_password)
+        btn_toggle.grid(row=2, column=2, padx=(5,10), pady=5)
+
+        # (placeholder)
+        other_tab = tb.Frame(nb)
+        nb.add(other_tab, text="Other")
+        tb.Label(other_tab,
+                 text="TBC",
+                 font=("Poppins", 14),
+                 foreground="#888888")\
+          .pack(expand=True)
+
+        # (placeholder)
+        other_tab = tb.Frame(nb)
+        nb.add(other_tab, text="Other")
+        tb.Label(other_tab,
+                 text="TBC",
+                 font=("Poppins", 14),
+                 foreground="#888888")\
+          .pack(expand=True)
+          
+        # (placeholder)
+        other_tab = tb.Frame(nb)
+        nb.add(other_tab, text="Other")
+        tb.Label(other_tab,
+                 text="TBC",
+                 font=("Poppins", 14),
+                 foreground="#888888")\
+          .pack(expand=True)
+
+
+        
+        btn = tb.Button(self,
+                        text="Save Settings",
+                        bootstyle="success-outline",
+                        command=lambda: tb.messagebox.showinfo("Settings", "Saved!"))
+        btn.pack(pady=10)
+        
+      
+        
+class AboutPage(BasePage):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+
+        # Page title
+        tb.Label(self,
+                 text="About This App",
+                 font=("Poppins", 24, "bold"),
+                 foreground="#ccd6f6")\
+          .pack(pady=(40, 10))
+
+        # About text
+        about_text = (
+            "Cognitive Eye Tracker v1.0\n\n"
+            "............................\n\n"
+            "............................\n\n"
+            "............................\n\n"
+            "............................\n\n"
+            "© 2025 All rights reserved."
+        )
+        tb.Label(self,
+                 text=about_text,
+                 font=("Poppins", 12),
+                 foreground="#ffffff",
+                 background="#0a192f",
+                 justify="center",
+                 wraplength=500)\
+          .pack(padx=40, pady=20)
+     
+     
+
+class ViewDataPage(BasePage):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+        self.controller.imported_folder = None
+
+        
+        self.notebook = tb.Notebook(self, bootstyle="secondary.TNotebook")
+        self.notebook.pack(fill=BOTH, expand=True, padx=20, pady=20)
+
+        
+        self.rt_tab  = tb.Frame(self.notebook)
+        self.imp_tab = tb.Frame(self.notebook)
+        self.notebook.add(self.rt_tab,  text="Real-Time Data")
+        self.notebook.add(self.imp_tab, text="Imported Data")
+        self.rt_index  = self.notebook.index(self.rt_tab)
+        self.imp_index = self.notebook.index(self.imp_tab)
+
+       
+        self._build_rt_pane()
+
+        
+        self._build_imp_pane()
+
+    def _build_rt_pane(self):
+        paned = tk.PanedWindow(self.rt_tab, orient=tk.HORIZONTAL)
+        paned.pack(fill=BOTH, expand=True)
+
+        lf = tb.Frame(paned, width=200)
+        paned.add(lf, stretch="always")
+        self.rt_list = tk.Listbox(lf)
+        self.rt_list.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.rt_list.bind("<<ListboxSelect>>", self._on_rt_select)
+
+        rf = tb.Frame(paned)
+        paned.add(rf, stretch="always")
+        self.rt_text   = tk.Text(rf, height=8, wrap="none")
+        self.rt_text.pack(fill=X, padx=5, pady=(5,0))
+        self.rt_graphs = tb.Frame(rf)
+        self.rt_graphs.pack(fill=BOTH, expand=True, padx=5, pady=5)
+
+        self._populate_rt()
+
+    def _populate_rt(self):
+        self.rt_list.delete(0, END)
+        user = self.controller.current_user_name or self.controller.current_user_email
+        base = f"deterministic_model_test/{user}"
+        if os.path.isdir(base):
+            for fn in sorted(os.listdir(base)):
+                if os.path.isdir(os.path.join(base, fn)):
+                    self.rt_list.insert(END, fn)
+
+    def _on_rt_select(self, _evt):
+        sel = self.rt_list.curselection()
+        if not sel: return
+        folder = self.rt_list.get(sel[0])
+        user   = self.controller.current_user_name or self.controller.current_user_email
+        base   = f"deterministic_model_test/{user}/{folder}"
+
+        # CSV preview
+        csvs = sorted([f for f in os.listdir(base) if f.endswith(".csv")])
+        if csvs:
+            df = pd.read_csv(os.path.join(base, csvs[0]))
+            self.rt_text.delete("1.0", END)
+            self.rt_text.insert(END, df.head(20).to_string(index=False))
+
+        # show graphs
+        for w in self.rt_graphs.winfo_children():
+            w.destroy()
+        imgs = []
+        for imgfile in sorted(os.listdir(base)):
+            if imgfile.lower().endswith(".png"):
+                path = os.path.join(base, imgfile)
+                im = Image.open(path).resize((180,180), Image.LANCZOS)
+                imgs.append(ImageTk.PhotoImage(im))
+        for i,photo in enumerate(imgs):
+            lbl = tk.Label(self.rt_graphs, image=photo, bd=0)
+            lbl.image = photo
+            lbl.grid(row=i//3, column=i%3, padx=5, pady=5)
+
+    def _build_imp_pane(self):
+        paned = tk.PanedWindow(self.imp_tab, orient=tk.HORIZONTAL)
+        paned.pack(fill=BOTH, expand=True)
+
+        lf = tb.Frame(paned, width=200)
+        paned.add(lf, stretch="always")
+        self.imp_list = tk.Listbox(lf)
+        self.imp_list.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.imp_list.bind("<<ListboxSelect>>", self._on_imp_select)
+
+        rf = tb.Frame(paned)
+        paned.add(rf, stretch="always")
+        self.imp_text = tk.Text(rf, height=20, wrap="none")
+        self.imp_text.pack(fill=BOTH, expand=True, padx=5, pady=5)
+
+    def _populate_imp(self):
+        self.imp_list.delete(0, END)
+        fld = self.controller.imported_folder
+        if fld and os.path.isdir(fld):
+            for fn in sorted(os.listdir(fld)):
+                if fn.lower().endswith(".csv"):
+                    self.imp_list.insert(END, fn)
+
+    def _on_imp_select(self, _evt):
+        sel = self.imp_list.curselection()
+        if not sel: return
+        fn  = self.imp_list.get(sel[0])
+        fld = self.controller.imported_folder
+        df  = pd.read_csv(os.path.join(fld, fn))
+        self.imp_text.delete("1.0", END)
+        self.imp_text.insert(END, df.head(50).to_string(index=False))
+
+    def show_imported_tab(self):
+        # Switch to the Imported tab and then populate it
+        self.notebook.select(self.imp_index)
+        self._populate_imp()
+
+        
+        
         
 
 
 class EyeTrackingApp(tb.Window):
     def __init__(self):
         super().__init__(themename="superhero")
+        
+        
         self.current_user_email = None
         self.current_user_name = None
+        self.imported_folder = None
         self.current_user_display_var = tk.StringVar(value="")
+        self.user_name_var  = tk.StringVar(value="")
+        self.user_email_var = tk.StringVar(value="")
+        self.user_password_var = tk.StringVar()
+
+
 
         self.configure(background='#0a192f')
 
@@ -454,7 +744,7 @@ class EyeTrackingApp(tb.Window):
         text_font = tkfont.nametofont("TkTextFont")
         text_font.configure(family="Poppins", size=20)
         heading_font = tkfont.nametofont("TkHeadingFont")
-        heading_font.configure(family="Poppins Semibold", size=20)
+        heading_font.configure(family="Poppins", size=20)
 
         self.geometry("1200x680")
         self.resizable(False, False)
@@ -496,15 +786,20 @@ class EyeTrackingApp(tb.Window):
         self.main_frame.pack(fill=BOTH, expand=True)
 
         self.frames = {}
-        for F in (LoginPage, HomePage, InstructionPage, TestPage, ImportPage):
+        for F in (LoginPage, HomePage, InstructionPage, ViewDataPage, ImportPage, SettingsPage, AboutPage):
             frame = F(parent=self.main_frame, controller=self)
             self.frames[F.__name__] = frame
             frame.place(relwidth=1, relheight=1)
 
         self.show_frame("LoginPage")
+        
 
     def show_frame(self, page_name):
-        self.frames[page_name].tkraise()
+        frame = self.frames[page_name]
+        frame.tkraise()
+        if hasattr(frame, "refresh_all"):
+            frame.refresh_all()
+
 
     def toggle_sidebar(self):
         if self.sidebar_visible:
@@ -532,9 +827,9 @@ class EyeTrackingApp(tb.Window):
                 ("Home",              lambda: self.show_frame("HomePage")),
                 ("Start Test",       lambda: self.show_frame("InstructionPage")),
                 ("Import Data",       lambda: self.show_frame("ImportPage")),
-                ("View Data Files",   self.view_data),
-                ("Settings",          lambda: None),
-                ("About",             lambda: None),
+                ("View Data Files", lambda: self.show_frame("ViewDataPage")),
+                ("Settings", lambda: self.show_frame("SettingsPage")),
+                ("About", lambda: self.show_frame("AboutPage")),
                 ("Log Out",           self.logout),
                 ("Exit",              self.quit)
             ]:
@@ -571,6 +866,8 @@ class EyeTrackingApp(tb.Window):
         self.current_user_email = None
         self.current_user_name  = None
         self.current_user_display_var.set("")
+        self.user_password_var.set("")
+
         # go back to login
         self.show_frame("LoginPage")
 
