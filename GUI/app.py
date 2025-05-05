@@ -3,10 +3,12 @@ import sys
 import shutil
 from tkinter import filedialog, messagebox
 import pandas as pd
+import datetime
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from PIL import Image, ImageTk, ImageOps, ImageSequence, ImageDraw
 from tkinter import BOTH, X, TOP, LEFT, RIGHT, END
+from tkinter.ttk import Treeview
 import tkinter.font as tkfont
 from auth import register_user, verify_user, get_user_name
 import tkinter.font as tkfont
@@ -148,6 +150,11 @@ class LoginPage(tb.Frame):
             # store in both the old attrs and your new StringVars
             self.controller.current_user_email      = email
             self.controller.current_user_name       = name
+            self.controller.user_data_folder = os.path.join(
+                "deterministic_model_test",
+                name or email
+            )
+            os.makedirs(self.controller.user_data_folder, exist_ok=True)
             self.controller.user_email_var.set(email)
             self.controller.user_name_var.set(name)
             self.controller.current_user_display_var.set(email)
@@ -284,43 +291,36 @@ class HomePage(BasePage):
 
 
 
+
+
 class InstructionPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
 
         # Instruction box 
-        instr_box = tb.Frame(self,
-                             style='Instr.TFrame',
-                             width=300, height=200)
+        instr_box = tb.Frame(self, style='Instr.TFrame', width=300, height=250)
         instr_box.place(relx=0.1, rely=0.5, anchor='w')
-        tb.Label(instr_box,
-                 text=(
-                     "1. Read these instructions carefully.\n"
-                     "2. Keep your head inside the oval.\n"
-                     "3. Follow the moving dot with your eyes.\n"
-                     "4. Click Begin when ready."
-                 ),
-                 font=("Poppins", 12),
-                 foreground="#ccd6f6",
-                 background='#223344',
-                 wraplength=280,
-                 justify="left").place(x=10, y=10)
+        tb.Label(
+            instr_box,
+            text=(
+                "1. Keep your head inside the oval.\n"
+                "2. Follow the moving dot with your eyes for 10 seconds.\n"
+                "3. If box turns red, reposition head inside oval.\n\n"
+                "Click Begin Test when ready."
+            ),
+            font=("Poppins", 12),
+            foreground="#ccd6f6",
+            background='#223344',
+            wraplength=280,
+            justify="left"
+        ).place(x=10, y=10)
 
-        # Oval + dot images
-        oval_w, oval_h = 200, 300  
-        dot_r = 20
-        dot_d = dot_r * 2
-        border_w = 4
-
+        # Helpers to draw the oval and dot
         def make_oval_img(w, h, outline, width):
             img = Image.new("RGBA", (w, h), (0,0,0,0))
             draw = ImageDraw.Draw(img)
             inset = width/2
-            draw.ellipse(
-                (inset, inset, w-inset, h-inset),
-                outline=outline,
-                width=width
-            )
+            draw.ellipse((inset, inset, w-inset, h-inset), outline=outline, width=width)
             return ImageTk.PhotoImage(img)
 
         def make_dot_img(r, fill):
@@ -330,52 +330,74 @@ class InstructionPage(BasePage):
             draw.ellipse((0,0,d,d), fill=fill)
             return ImageTk.PhotoImage(img)
 
-        # build once
+        # Build once
+        oval_w, oval_h = 200, 300
+        dot_r, border_w = 20, 4
+        dot_d = dot_r*2
         self.oval_img = make_oval_img(oval_w, oval_h, 'red', border_w)
         self.dot_img  = make_dot_img(dot_r, 'yellow')
 
-        # container exactly the size of dot + oval
+        # Container for dot + oval
         container_h = dot_d + oval_h
-        ovbox = tb.Frame(self,
-                         width=oval_w,
-                         height=container_h,
-                         style='TFrame')    
+        ovbox = tb.Frame(self, width=oval_w, height=container_h, style='TFrame')
         ovbox.place(relx=0.5, rely=0.5, anchor='center')
 
-        # place the dot at the top
-        lbl_dot = tb.Label(ovbox,
-                           image=self.dot_img,
-                           background='#0a192f',
-                           borderwidth=0)
-        lbl_dot.place(x=(oval_w - dot_d)/2, y=0,
-                      width=dot_d, height=dot_d)
+        # Place the dot at the top
+        lbl_dot = tb.Label(ovbox, image=self.dot_img, background='#0a192f', borderwidth=0)
+        lbl_dot.place(x=(oval_w - dot_d)/2, y=0, width=dot_d, height=dot_d)
 
-        # place the oval below it
-        lbl_oval = tb.Label(ovbox,
-                            image=self.oval_img,
-                            background='#0a192f',
-                            borderwidth=0)
-        lbl_oval.place(x=0, y=dot_d,
-                       width=oval_w, height=oval_h)
+        # Place the oval below it
+        lbl_oval = tb.Label(ovbox, image=self.oval_img, background='#0a192f', borderwidth=0)
+        lbl_oval.place(x=0, y=dot_d, width=oval_w, height=oval_h)
 
-        # Begin Test button 
-        btn_w, btn_h = 260, 80
-        tb.Button(self,
-                  text="Begin Test",
-                  bootstyle="success-outline",
-                  takefocus=False,
-                  command=self._start_test
-                 ).place(relx=0.85,
-                         rely=0.5,
-                         anchor='e',
-                         width=btn_w,
-                         height=btn_h)
+        # Begin Test button
+        tb.Button(
+            self,
+            text="Begin Test",
+            bootstyle="success-outline",
+            takefocus=False,
+            command=self._start_test
+        ).place(
+            relx=0.85, rely=0.5, anchor='e',
+            width=260, height=80
+        )
 
     def _start_test(self):
-        # call real_time 
-        track_eye_activity("PatientName", tracking_duration=10)
-        # then flip to TestPage
-        self.controller.show_frame("TestPage")
+        
+        user = (
+            self.controller.current_user_name
+            or self.controller.current_user_email
+            or "UnknownUser"
+        )
+        user_folder = os.path.join("deterministic_model_test", user)
+        os.makedirs(user_folder, exist_ok=True)
+
+        
+        track_eye_activity(user, tracking_duration=10)
+
+        
+        import_existing_data_and_generate_report(user, user_folder)
+
+        
+        view_page = self.controller.frames["ViewDataPage"]
+        view_page._populate_rt()
+
+        
+        tree = view_page.rt_tree
+        roots = tree.get_children()
+        if roots:
+            root = roots[0]
+            files = tree.get_children(root)
+            if files:
+                last = files[-1]
+                tree.selection_set(last)
+                view_page._on_rt_select(None)
+
+        
+        self.controller.show_frame("ViewDataPage")
+
+
+
 
 
 
@@ -601,16 +623,15 @@ class AboutPage(BasePage):
      
      
 
+
 class ViewDataPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
         self.controller.imported_folder = None
 
-        
         self.notebook = tb.Notebook(self, bootstyle="secondary.TNotebook")
         self.notebook.pack(fill=BOTH, expand=True, padx=20, pady=20)
 
-        
         self.rt_tab  = tb.Frame(self.notebook)
         self.imp_tab = tb.Frame(self.notebook)
         self.notebook.add(self.rt_tab,  text="Real-Time Data")
@@ -618,21 +639,20 @@ class ViewDataPage(BasePage):
         self.rt_index  = self.notebook.index(self.rt_tab)
         self.imp_index = self.notebook.index(self.imp_tab)
 
-       
         self._build_rt_pane()
-
-        
         self._build_imp_pane()
 
     def _build_rt_pane(self):
         paned = tk.PanedWindow(self.rt_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        lf = tb.Frame(paned, width=200)
+        lf = tb.Frame(paned)
         paned.add(lf, stretch="always")
-        self.rt_list = tk.Listbox(lf)
-        self.rt_list.pack(fill=BOTH, expand=True, padx=5, pady=5)
-        self.rt_list.bind("<<ListboxSelect>>", self._on_rt_select)
+
+        # Treeview for folder -> files
+        self.rt_tree = Treeview(lf, show="tree")
+        self.rt_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.rt_tree.bind("<<TreeviewSelect>>", self._on_rt_select)
 
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
@@ -644,38 +664,53 @@ class ViewDataPage(BasePage):
         self._populate_rt()
 
     def _populate_rt(self):
-        self.rt_list.delete(0, END)
+        for iid in self.rt_tree.get_children():
+            self.rt_tree.delete(iid)
+
+        # Don’t try to load anything until we have a logged-in user
         user = self.controller.current_user_name or self.controller.current_user_email
-        base = f"deterministic_model_test/{user}"
+        if not user:
+            return
+        base = os.path.join("deterministic_model_test", user)
         if os.path.isdir(base):
+            # Root node: user folder
+            root_id = self.rt_tree.insert("", "end", text=user, open=True)
+            # Child nodes: CSV files
             for fn in sorted(os.listdir(base)):
-                if os.path.isdir(os.path.join(base, fn)):
-                    self.rt_list.insert(END, fn)
+                if fn.lower().endswith(".csv"):
+                    self.rt_tree.insert(root_id, "end", text=fn)
 
     def _on_rt_select(self, _evt):
-        sel = self.rt_list.curselection()
-        if not sel: return
-        folder = self.rt_list.get(sel[0])
-        user   = self.controller.current_user_name or self.controller.current_user_email
-        base   = f"deterministic_model_test/{user}/{folder}"
+        sel = self.rt_tree.selection()
+        if not sel:
+            return
+        item = sel[0]
+        parent = self.rt_tree.parent(item)
+        # Ignore root selection
+        if parent == "":
+            return
 
-        # CSV preview
-        csvs = sorted([f for f in os.listdir(base) if f.endswith(".csv")])
-        if csvs:
-            df = pd.read_csv(os.path.join(base, csvs[0]))
-            self.rt_text.delete("1.0", END)
-            self.rt_text.insert(END, df.head(20).to_string(index=False))
+        csvfile = self.rt_tree.item(item, "text")
+        user    = self.controller.current_user_name or self.controller.current_user_email
+        base    = os.path.join("deterministic_model_test", user)
+        path    = os.path.join(base, csvfile)
 
-        # show graphs
+        # Display CSV head
+        df = pd.read_csv(path)
+        self.rt_text.delete("1.0", END)
+        self.rt_text.insert(END, df.head(20).to_string(index=False))
+
+        # Display associated graphs
         for w in self.rt_graphs.winfo_children():
             w.destroy()
+        rootname, _ = os.path.splitext(csvfile)
         imgs = []
         for imgfile in sorted(os.listdir(base)):
-            if imgfile.lower().endswith(".png"):
-                path = os.path.join(base, imgfile)
-                im = Image.open(path).resize((180,180), Image.LANCZOS)
+            if imgfile.startswith(rootname) and imgfile.lower().endswith(".png"):
+                img_path = os.path.join(base, imgfile)
+                im = Image.open(img_path).resize((180,180), Image.LANCZOS)
                 imgs.append(ImageTk.PhotoImage(im))
-        for i,photo in enumerate(imgs):
+        for i, photo in enumerate(imgs):
             lbl = tk.Label(self.rt_graphs, image=photo, bd=0)
             lbl.image = photo
             lbl.grid(row=i//3, column=i%3, padx=5, pady=5)
@@ -713,9 +748,9 @@ class ViewDataPage(BasePage):
         self.imp_text.insert(END, df.head(50).to_string(index=False))
 
     def show_imported_tab(self):
-        # Switch to the Imported tab and then populate it
         self.notebook.select(self.imp_index)
         self._populate_imp()
+
 
         
         
@@ -729,6 +764,7 @@ class EyeTrackingApp(tb.Window):
         
         self.current_user_email = None
         self.current_user_name = None
+        self.user_data_folder       = None
         self.imported_folder = None
         self.current_user_display_var = tk.StringVar(value="")
         self.user_name_var  = tk.StringVar(value="")

@@ -7,3 +7,16 @@ bootstrap app
 for report:
 use graphs and charts
 compare ai model and algo model
+
+
+
+
+NOTES FOR UI:
+panel sizing is the same for both tabs
+make sure files save per user
+import works for algorithm
+testing inside UI -  maybe
+about section -  fill
+hashing -evie - add
+
+

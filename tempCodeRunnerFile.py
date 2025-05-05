@@ -895,30 +895,26 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
                     all_data.append(df[required_columns])
 
 
-        ai_prediction = "Inconclusive"
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
+            #  Keep only important features (no saccades)
             selected_features = [
                 'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
                 'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
                 'fixation_duration', 'Blink_Count', 'Blink_Duration'
             ]
             combined_df = combined_df[selected_features]
+            #  Load the saved scaler
+            scaler = joblib.load('scaler.pkl')
+            features = combined_df.values
+            
+            features_scaled = scaler.transform(features)
+            
+            prediction = cognitive_model.predict(features_scaled)
+            predicted_class = int(prediction[0])
+            ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
 
-            # Drop any rows with missing values before scaling
-            combined_df = combined_df.dropna()
-            if not combined_df.empty:
-                try:
-                    scaler = joblib.load('scaler.pkl')
-                    features = combined_df.values
-                    features_scaled = scaler.transform(features)
-                    prediction = cognitive_model.predict(features_scaled)
-                    predicted_class = int(prediction[0])
-                    ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
-                except Exception as e:
-                    print(f"[WARNING] AI prediction failed, marking Inconclusive: {e}")
-            else:
-                print("[WARNING] No complete rows for AI—marking Inconclusive.")
+
         # Debug prints
         print("[DEBUG] Deterministic Prediction:", deterministic_prediction)
         print("[DEBUG] AI Prediction:", ai_prediction)
@@ -926,15 +922,15 @@ def import_existing_data_and_generate_report(patient_name, folder_path):
 
         week_number = num_csv // 7
 
-        # AI model always inconclusive
-        generate_pdf_report(
-            patient_name,
-            week_number,
-            deterministic_prediction,
-            ai_prediction,
-            patient_folder
-        )
-        save_weekly_summary(patient_name, week_number, deterministic_prediction)
+        if deterministic_prediction is not None and ai_prediction is not None:
+            generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
+            save_weekly_summary(patient_name, week_number, deterministic_prediction)
+        else:
+            print("[WARNING] Predictions incomplete. Skipping PDF generation.")
+
+    # After saving weekly summary, check if 4 weeks done
+    if num_csv >= 28:
+        generate_monthly_report(patient_name)
 
 
 
