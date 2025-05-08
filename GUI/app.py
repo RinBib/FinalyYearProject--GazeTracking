@@ -150,11 +150,10 @@ class LoginPage(tb.Frame):
             # store in both the old attrs and your new StringVars
             self.controller.current_user_email      = email
             self.controller.current_user_name       = name
-            self.controller.user_data_folder = os.path.join(
-                "deterministic_model_test",
-                name or email
-            )
-            os.makedirs(self.controller.user_data_folder, exist_ok=True)
+            user_folder = os.path.join("deterministic_model_test", name or email)
+            os.makedirs(user_folder, exist_ok=True)
+            self.controller.user_data_folder = user_folder
+
             self.controller.user_email_var.set(email)
             self.controller.user_name_var.set(name)
             self.controller.current_user_display_var.set(email)
@@ -364,41 +363,36 @@ class InstructionPage(BasePage):
 
     def _start_test(self):
         
-        user = (
+
+        
+        patient_name = (
             self.controller.current_user_name
             or self.controller.current_user_email
             or "UnknownUser"
         )
-        user_folder = os.path.join("deterministic_model_test", user)
+
+        
+        user_folder = os.path.join("deterministic_model_test", patient_name)
         os.makedirs(user_folder, exist_ok=True)
 
-        
-        track_eye_activity(user, tracking_duration=10)
+       
+        track_eye_activity(patient_name, tracking_duration=10)
 
         
-        import_existing_data_and_generate_report(user, user_folder)
+        import_existing_data_and_generate_report(patient_name, user_folder)
 
         
         view_page = self.controller.frames["ViewDataPage"]
         view_page._populate_rt()
-
-        
-        tree = view_page.rt_tree
-        roots = tree.get_children()
+        roots = view_page.rt_tree.get_children()
         if roots:
-            root = roots[0]
-            files = tree.get_children(root)
+            files = view_page.rt_tree.get_children(roots[0])
             if files:
-                last = files[-1]
-                tree.selection_set(last)
+                view_page.rt_tree.selection_set(files[-1])
                 view_page._on_rt_select(None)
 
-        
+        #  switch to the Real-Time tab
         self.controller.show_frame("ViewDataPage")
-
-
-
-
 
 
 class TestPage(BasePage):
@@ -449,6 +443,12 @@ class ImportPage(BasePage):
         folder = tk.filedialog.askdirectory(title="Select folder with CSV files")
         if not folder:
             return
+        
+        user = (
+            self.controller.current_user_name
+            or self.controller.current_user_email
+            or "UnknownUser"
+        )
 
         
         csvs = [f for f in os.listdir(folder) if f.lower().endswith(".csv")]
@@ -460,28 +460,19 @@ class ImportPage(BasePage):
             return
 
         
-        user = (
-            self.controller.current_user_name
-            or self.controller.current_user_email
-            or "UnknownUser"
-        )
-        target_dir = os.path.join(
-            "deterministic_model_test", user, "imported"
-        )
-        os.makedirs(target_dir, exist_ok=True)
+        import_base = os.path.join(self.controller.user_data_folder, "imported")
+        os.makedirs(import_base, exist_ok=True)
         for fname in csvs:
             src = os.path.join(folder, fname)
-            dst = os.path.join(target_dir, fname)
+            dst = os.path.join(import_base, fname)
             if not os.path.exists(dst):
                 shutil.copy(src, dst)
 
-        
-        self.controller.imported_folder = target_dir
+        self.controller.imported_folder = import_base
 
-        
+
         self.msg.config(text=f"Imported {len(csvs)} file(s) for '{user}'")
 
-        
         view_page = self.controller.frames["ViewDataPage"]
         view_page.show_imported_tab()
 
@@ -624,11 +615,14 @@ class AboutPage(BasePage):
      
 
 
+
+
 class ViewDataPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
         self.controller.imported_folder = None
 
+        # Notebook tabs
         self.notebook = tb.Notebook(self, bootstyle="secondary.TNotebook")
         self.notebook.pack(fill=BOTH, expand=True, padx=20, pady=20)
 
@@ -636,9 +630,8 @@ class ViewDataPage(BasePage):
         self.imp_tab = tb.Frame(self.notebook)
         self.notebook.add(self.rt_tab,  text="Real-Time Data")
         self.notebook.add(self.imp_tab, text="Imported Data")
-        self.rt_index  = self.notebook.index(self.rt_tab)
-        self.imp_index = self.notebook.index(self.imp_tab)
 
+        # Build both panes
         self._build_rt_pane()
         self._build_imp_pane()
 
@@ -646,72 +639,75 @@ class ViewDataPage(BasePage):
         paned = tk.PanedWindow(self.rt_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        lf = tb.Frame(paned)
-        paned.add(lf, stretch="always")
+        
+        lf = tb.Frame(paned, width=300)
+        lf.pack_propagate(False)
+        paned.add(lf, stretch="always", minsize=300)
 
-        # Treeview for folder -> files
         self.rt_tree = Treeview(lf, show="tree")
         self.rt_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
         self.rt_tree.bind("<<TreeviewSelect>>", self._on_rt_select)
+        
 
+        
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
-        self.rt_text   = tk.Text(rf, height=8, wrap="none")
+
+        self.rt_text   = tk.Text(rf, wrap="none")
         self.rt_text.pack(fill=X, padx=5, pady=(5,0))
         self.rt_graphs = tb.Frame(rf)
-        self.rt_graphs.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.rt_graphs.pack(fill=BOTH, expand=True, padx=5, pady=(5,0))
+
+        # force sash at 300px
+        paned.update_idletasks()
+        paned.sash_place(0, 300, 0)
 
         self._populate_rt()
 
     def _populate_rt(self):
-        for iid in self.rt_tree.get_children():
+        # Clear
+        for iid in self.rt_tree.get_children():  
             self.rt_tree.delete(iid)
 
-        # Don’t try to load anything until we have a logged-in user
+        # nothing until user logs in
         user = self.controller.current_user_name or self.controller.current_user_email
-        if not user:
+        if not user:  
             return
-        base = os.path.join("deterministic_model_test", user)
+
+        base = self.controller.user_data_folder
         if os.path.isdir(base):
-            # Root node: user folder
-            root_id = self.rt_tree.insert("", "end", text=user, open=True)
-            # Child nodes: CSV files
+            root = self.rt_tree.insert("", "end", text=user, open=True)
             for fn in sorted(os.listdir(base)):
                 if fn.lower().endswith(".csv"):
-                    self.rt_tree.insert(root_id, "end", text=fn)
+                    self.rt_tree.insert(root, "end", text=fn)
 
     def _on_rt_select(self, _evt):
         sel = self.rt_tree.selection()
-        if not sel:
-            return
+        if not sel: return
         item = sel[0]
-        parent = self.rt_tree.parent(item)
-        # Ignore root selection
-        if parent == "":
+        if self.rt_tree.parent(item) == "":  
             return
+        fn = self.rt_tree.item(item, "text")
+        user = self.controller.current_user_name or self.controller.current_user_email
+        base = os.path.join("deterministic_model_test", user)
 
-        csvfile = self.rt_tree.item(item, "text")
-        user    = self.controller.current_user_name or self.controller.current_user_email
-        base    = os.path.join("deterministic_model_test", user)
-        path    = os.path.join(base, csvfile)
-
-        # Display CSV head
-        df = pd.read_csv(path)
+        # load CSV
+        df = pd.read_csv(os.path.join(base, fn))
         self.rt_text.delete("1.0", END)
         self.rt_text.insert(END, df.head(20).to_string(index=False))
 
-        # Display associated graphs
+        # load graphs
         for w in self.rt_graphs.winfo_children():
             w.destroy()
-        rootname, _ = os.path.splitext(csvfile)
+        rootname, _ = os.path.splitext(fn)
         imgs = []
-        for imgfile in sorted(os.listdir(base)):
-            if imgfile.startswith(rootname) and imgfile.lower().endswith(".png"):
-                img_path = os.path.join(base, imgfile)
-                im = Image.open(img_path).resize((180,180), Image.LANCZOS)
+        for img in sorted(os.listdir(base)):
+            if img.startswith(rootname) and img.lower().endswith(".png"):
+                path = os.path.join(base, img)
+                im = Image.open(path).resize((180,180), Image.LANCZOS)
                 imgs.append(ImageTk.PhotoImage(im))
-        for i, photo in enumerate(imgs):
-            lbl = tk.Label(self.rt_graphs, image=photo, bd=0)
+        for i,photo in enumerate(imgs):
+            lbl = tk.Label(self.rt_graphs, image=photo)
             lbl.image = photo
             lbl.grid(row=i//3, column=i%3, padx=5, pady=5)
 
@@ -719,42 +715,78 @@ class ViewDataPage(BasePage):
         paned = tk.PanedWindow(self.imp_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        lf = tb.Frame(paned, width=200)
-        paned.add(lf, stretch="always")
-        self.imp_list = tk.Listbox(lf)
-        self.imp_list.pack(fill=BOTH, expand=True, padx=5, pady=5)
-        self.imp_list.bind("<<ListboxSelect>>", self._on_imp_select)
+        
+        lf = tb.Frame(paned, width=300)
+        lf.pack_propagate(False)
+        paned.add(lf, stretch="always", minsize=300)
 
+        self.imp_tree = Treeview(lf, show="tree")
+        self.imp_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.imp_tree.bind("<<TreeviewSelect>>", self._on_imp_select)
+
+        
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
-        self.imp_text = tk.Text(rf, height=20, wrap="none")
-        self.imp_text.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        
+
+
+        self.imp_text = tk.Text(rf, wrap="none")
+        self.imp_text.pack(fill=BOTH, expand=True, padx=5, pady=(5,0))
+
+        paned.update_idletasks()
+        paned.sash_place(0, 300, 0)
 
     def _populate_imp(self):
-        self.imp_list.delete(0, END)
-        fld = self.controller.imported_folder
+        # clear out any old items
+        for iid in self.imp_tree.get_children():
+            self.imp_tree.delete(iid)
+
+        # get the logged-in user
+        user = self.controller.current_user_name or self.controller.current_user_email
+        if not user:
+            return
+
+        # root node is the user name
+        root = self.imp_tree.insert("", "end", text=user, open=True)
+
+        fld = os.path.join(self.controller.user_data_folder, "imported")
         if fld and os.path.isdir(fld):
             for fn in sorted(os.listdir(fld)):
                 if fn.lower().endswith(".csv"):
-                    self.imp_list.insert(END, fn)
+                    self.imp_tree.insert(root, "end", text=fn)
+
 
     def _on_imp_select(self, _evt):
-        sel = self.imp_list.curselection()
+        sel = self.imp_tree.selection()
         if not sel: return
-        fn  = self.imp_list.get(sel[0])
-        fld = self.controller.imported_folder
-        df  = pd.read_csv(os.path.join(fld, fn))
+        item = sel[0]
+        if self.imp_tree.parent(item) == "":
+            return
+        fn = self.imp_tree.item(item, "text")
+        
+            # session = "dog1" or "dog2" etc. (your Treeview parent)
+        session = self.imp_tree.item(self.imp_tree.parent(item), "text")
+
+        user = self.controller.current_user_name \
+            or self.controller.current_user_email
+
+        base = os.path.join("deterministic_model_test", user, "imported", session)
+        path = os.path.join(base, fn)
+
+        df = pd.read_csv(path)
+
         self.imp_text.delete("1.0", END)
         self.imp_text.insert(END, df.head(50).to_string(index=False))
 
     def show_imported_tab(self):
-        self.notebook.select(self.imp_index)
+        self.notebook.select(self.imp_tab)
         self._populate_imp()
-
-
         
         
+    def refresh_all(self):
         
+        self._populate_rt()
+        self._populate_imp()    
 
 
 class EyeTrackingApp(tb.Window):

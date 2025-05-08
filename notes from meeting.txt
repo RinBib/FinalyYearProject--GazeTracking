@@ -12,9 +12,9 @@ compare ai model and algo model
 
 
 NOTES FOR UI:
-panel sizing is the same for both tabs
-make sure files save per user
-import works for algorithm
+panel sizing is the same for both tabs - wont work gon naleave it for now                            DONE
+make sure files save per user                                                                        DONE
+import works for algorithm  
 testing inside UI -  maybe
 about section -  fill
 hashing -evie - add

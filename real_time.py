@@ -1035,6 +1035,3 @@ if __name__ == "__main__":
 
         else:
             print("Invalid choice. Please select 1, 2, or 3.")
-
-
-
