@@ -603,13 +603,13 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
     
 def plot_weekly_speed_trend(patient_name, data_folder, week_number):
     
-    # 1️⃣ grab only the last 7 CSVs in data_folder
+    
     csvs = sorted(f for f in os.listdir(data_folder) if f.endswith(".csv"))
     if len(csvs) < 7:
         print(f"Not enough data: {len(csvs)}/7 CSVs.")
         return
 
-    # 2️⃣ compute your four series
+    
     day_nums, avg_speeds, avg_fixations, avg_blinks, avg_blink_durs = [], [], [], [], []
     for idx, fn in enumerate(csvs[-7:], start=1):
         df = pd.read_csv(os.path.join(data_folder, fn))
@@ -620,7 +620,7 @@ def plot_weekly_speed_trend(patient_name, data_folder, week_number):
         avg_blinks.append(df["Blink_Count"].mean())
         avg_blink_durs.append(df["Blink_Duration"].mean())
 
-    # 3️⃣ helper to save each plot
+    
     def _save(x, y, ylabel, title, suffix, marker=None):
         plt.figure(figsize=(8,5))
         if marker:
@@ -637,7 +637,7 @@ def plot_weekly_speed_trend(patient_name, data_folder, week_number):
         plt.savefig(os.path.join(data_folder, fname))
         plt.close()
 
-    # 4️⃣ save all four with distinct suffixes
+    
     _save(day_nums, avg_speeds,     "Speed (mm/sec)",           "Weekly Speed Trend",    "speed_trend")
     _save(day_nums, avg_fixations,  "Fixation count",           "Weekly Fixation Trend", "fixation_trend",  marker='s')
     _save(day_nums, avg_blinks,     "Blink freq (blinks/sec)",  "Weekly Blink Freq",     "blink_freq",      marker='^')
@@ -762,11 +762,8 @@ def save_weekly_summary(patient_name, week_number, prediction):
 
 
 def import_existing_data_and_generate_report(patient_name, session_folder):
-    """
-    patient_name:    the user’s ID (e.g. "dog")
-    session_folder:  the path to imported/<patient><n>/
-    """
-    # 1️⃣ Gather CSVs from this session folder
+    
+    
     csvs = sorted(f for f in os.listdir(session_folder) if f.lower().endswith(".csv"))
     num_csv = len(csvs)
     print(f"[INFO] Found {num_csv} CSV(s) in session {session_folder}")
@@ -779,20 +776,20 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
     # compute week number
     week_number = num_csv // 7
 
-    # 2️⃣ Run the deterministic check on these 7+ files
+    
     det_pred = check_weekly_prediction(
         patient_name,
         data_folder=session_folder
     )
 
-    # 3️⃣ Plot into the same session folder
+    
     plot_weekly_speed_trend(
         patient_name,
         data_folder=session_folder,
         week_number=week_number
     )
 
-    # 4️⃣ Build the AI prediction
+    
     all_data = []
     for fn in csvs:
         df = pd.read_csv(os.path.join(session_folder, fn))
@@ -814,7 +811,7 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
             cls = int(cognitive_model.predict(scaler.transform(combined.values))[0])
             ai_pred = "IMPAIRED" if cls == 0 else "HEALTHY"
 
-    # 5️⃣ Generate the PDF in this session folder
+    
     generate_pdf_report(
         patient_name,
         week_number,
@@ -823,7 +820,7 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
         data_folder=session_folder
     )
 
-    # 6️⃣ Append to weekly_summary.csv right next to the CSVs
+    
     summary_csv = os.path.join(session_folder, "weekly_summary.csv")
     if not os.path.exists(summary_csv):
         with open(summary_csv, "w") as f:

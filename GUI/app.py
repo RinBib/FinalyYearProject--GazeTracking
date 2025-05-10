@@ -333,7 +333,7 @@ class InstructionPage(BasePage):
         oval_w, oval_h = 200, 300
         dot_r, border_w = 20, 4
         dot_d = dot_r*2
-        self.oval_img = make_oval_img(oval_w, oval_h, 'red', border_w)
+        self.oval_img = make_oval_img(oval_w, oval_h, 'green', border_w)
         self.dot_img  = make_dot_img(dot_r, 'yellow')
 
         # Container for dot + oval
@@ -360,10 +360,9 @@ class InstructionPage(BasePage):
             relx=0.85, rely=0.5, anchor='e',
             width=260, height=80
         )
-
-    def _start_test(self):
         
 
+    def _start_test(self):
         
         patient_name = (
             self.controller.current_user_name
@@ -692,38 +691,60 @@ class ViewDataPage(BasePage):
         if os.path.isdir(base):
             root = self.rt_tree.insert("", "end", text=user, open=True)
             for fn in sorted(os.listdir(base)):
-                if fn.lower().endswith(".csv"):
+                if fn.lower().endswith( (".csv", ".png", ".pdf") ):
                     self.rt_tree.insert(root, "end", text=fn)
 
     def _on_rt_select(self, _evt):
         sel = self.rt_tree.selection()
-        if not sel: return
-        item = sel[0]
-        if self.rt_tree.parent(item) == "":  
+        if not sel:
             return
+        item = sel[0]
+        if self.rt_tree.parent(item) == "":
+            return
+
         fn = self.rt_tree.item(item, "text")
         user = self.controller.current_user_name or self.controller.current_user_email
         base = os.path.join("deterministic_model_test", user)
+        path = os.path.join(base, fn)
 
-        # load CSV
-        df = pd.read_csv(os.path.join(base, fn))
+        # clear
         self.rt_text.delete("1.0", END)
-        self.rt_text.insert(END, df.head(20).to_string(index=False))
 
-        # load graphs
+        ext = os.path.splitext(fn)[1].lower()
+        if ext == ".csv":
+            df = pd.read_csv(path)
+            self.rt_text.insert(END, df.head(20).to_string(index=False))
+
+        elif ext in (".png", ".jpg", ".jpeg"):
+            # display image inline
+            img = Image.open(path).resize((300, 300), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            # insert into text widget
+            self.rt_text.image_create("1.0", image=photo)
+            self.rt_text.image = photo
+
+        elif ext == ".pdf":
+            # just show the path (or open externally)
+            self.rt_text.insert(END, f"PDF report saved at:\n{path}")
+
+        else:
+            self.rt_text.insert(END, f"Cannot preview this file type:\n{fn}")
+
+        # now re-draw any graphs that match the *csv* you clicked on:
         for w in self.rt_graphs.winfo_children():
             w.destroy()
         rootname, _ = os.path.splitext(fn)
         imgs = []
-        for img in sorted(os.listdir(base)):
-            if img.startswith(rootname) and img.lower().endswith(".png"):
-                path = os.path.join(base, img)
-                im = Image.open(path).resize((180,180), Image.LANCZOS)
+        for imgfile in sorted(os.listdir(base)):
+            if imgfile.startswith(rootname) and imgfile.lower().endswith(".png"):
+                im = Image.open(os.path.join(base, imgfile)).resize((180,180), Image.LANCZOS)
                 imgs.append(ImageTk.PhotoImage(im))
         for i,photo in enumerate(imgs):
             lbl = tk.Label(self.rt_graphs, image=photo)
             lbl.image = photo
             lbl.grid(row=i//3, column=i%3, padx=5, pady=5)
+
+
 
     def _build_imp_pane(self):
         paned = tk.PanedWindow(self.imp_tab, orient=tk.HORIZONTAL)
