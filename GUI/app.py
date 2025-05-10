@@ -439,18 +439,18 @@ class ImportPage(BasePage):
         self.msg.pack(pady=(20,0))
 
     def _on_browse(self):
-        
+        # 1️⃣ let the user pick a folder of CSVs
         folder = tk.filedialog.askdirectory(title="Select folder with CSV files")
         if not folder:
             return
-        
+
         user = (
             self.controller.current_user_name
             or self.controller.current_user_email
             or "UnknownUser"
         )
 
-        
+        # 2️⃣ collect only the .csv files
         csvs = [f for f in os.listdir(folder) if f.lower().endswith(".csv")]
         if not csvs:
             tk.messagebox.showwarning(
@@ -459,22 +459,36 @@ class ImportPage(BasePage):
             )
             return
 
-        
+        # 3️⃣ ensure the per-user imported/ base exists
         import_base = os.path.join(self.controller.user_data_folder, "imported")
         os.makedirs(import_base, exist_ok=True)
+
+        # 4️⃣ pick a new session name (User1, User2, …)
+        existing = [
+            d for d in os.listdir(import_base)
+            if os.path.isdir(os.path.join(import_base, d))
+        ]
+        session_name = f"{user}{len(existing) + 1}"
+        session_folder = os.path.join(import_base, session_name)
+        os.makedirs(session_folder)
+
+        # 5️⃣ copy CSVs into that session
         for fname in csvs:
-            src = os.path.join(folder, fname)
-            dst = os.path.join(import_base, fname)
-            if not os.path.exists(dst):
-                shutil.copy(src, dst)
+            shutil.copy(
+                os.path.join(folder, fname),
+                os.path.join(session_folder, fname)
+            )
 
-        self.controller.imported_folder = import_base
+        # 6️⃣ process & report on *this* session
+        import_existing_data_and_generate_report(user, session_folder)
 
+        # 7️⃣ give feedback
+        self.msg.config(text=f"Imported {len(csvs)} file(s) as session '{session_name}'")
 
-        self.msg.config(text=f"Imported {len(csvs)} file(s) for '{user}'")
-
+        # 8️⃣ show the Imported Data tab (ViewDataPage)
         view_page = self.controller.frames["ViewDataPage"]
         view_page.show_imported_tab()
+
 
         
         
@@ -737,46 +751,83 @@ class ViewDataPage(BasePage):
         paned.sash_place(0, 300, 0)
 
     def _populate_imp(self):
-        # clear out any old items
+        # clear tree
         for iid in self.imp_tree.get_children():
             self.imp_tree.delete(iid)
 
-        # get the logged-in user
         user = self.controller.current_user_name or self.controller.current_user_email
         if not user:
             return
 
-        # root node is the user name
-        root = self.imp_tree.insert("", "end", text=user, open=True)
+        base = os.path.join(self.controller.user_data_folder, "imported")
+        if not os.path.isdir(base):
+            return
 
-        fld = os.path.join(self.controller.user_data_folder, "imported")
-        if fld and os.path.isdir(fld):
-            for fn in sorted(os.listdir(fld)):
-                if fn.lower().endswith(".csv"):
-                    self.imp_tree.insert(root, "end", text=fn)
-
+        # one root per session folder
+        for session in sorted(os.listdir(base)):
+            session_path = os.path.join(base, session)
+            if not os.path.isdir(session_path):
+                continue
+            sid = self.imp_tree.insert("", "end", text=session, open=True)
+            # list every CSV, PNG, PDF, JPG
+            for fn in sorted(os.listdir(session_path)):
+                if fn.lower().endswith((".csv", ".png", ".jpg", ".jpeg", ".pdf")):
+                    self.imp_tree.insert(sid, "end", text=fn)
 
     def _on_imp_select(self, _evt):
         sel = self.imp_tree.selection()
-        if not sel: return
-        item = sel[0]
-        if self.imp_tree.parent(item) == "":
+        if not sel:
             return
-        fn = self.imp_tree.item(item, "text")
-        
-            # session = "dog1" or "dog2" etc. (your Treeview parent)
-        session = self.imp_tree.item(self.imp_tree.parent(item), "text")
+        item   = sel[0]
+        parent = self.imp_tree.parent(item)
 
-        user = self.controller.current_user_name \
-            or self.controller.current_user_email
+        # if they clicked the session name itself, show its latest summary
+        if parent == "":
+            session     = self.imp_tree.item(item, "text")
+            session_dir = os.path.join(self.controller.user_data_folder, "imported", session)
+            summary_csv = os.path.join(session_dir, "weekly_summary.csv")
 
-        base = os.path.join("deterministic_model_test", user, "imported", session)
-        path = os.path.join(base, fn)
+            self.imp_text.delete("1.0", END)
+            if os.path.exists(summary_csv):
+                df = pd.read_csv(summary_csv)
+                last = df.iloc[-1]
+                self.imp_text.insert(END,
+                    f"Session: {session}\n\n"
+                    f"Latest Weekly Summary:\n"
+                    f"  Week {int(last['Week'])}: {last['Prediction']}"
+                )
+            else:
+                self.imp_text.insert(END,
+                    f"Session: {session}\n\n"
+                    "No weekly_summary.csv found."
+                )
+            return
 
-        df = pd.read_csv(path)
+        # otherwise they clicked a file under a session
+        fn      = self.imp_tree.item(item, "text")
+        session = self.imp_tree.item(parent, "text")
+        path    = os.path.join(self.controller.user_data_folder, "imported", session, fn)
+        ext     = os.path.splitext(fn)[1].lower()
 
         self.imp_text.delete("1.0", END)
-        self.imp_text.insert(END, df.head(50).to_string(index=False))
+
+        if ext == ".csv":
+            df = pd.read_csv(path)
+            self.imp_text.insert(END, df.head(50).to_string(index=False))
+
+        elif ext in (".png", ".jpg", ".jpeg"):
+            img = Image.open(path).resize((300, 300), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            # clear previous image refs
+            self.imp_text.image = photo
+            self.imp_text.image_create("1.0", image=photo)
+
+        elif ext == ".pdf":
+            self.imp_text.insert(END, f"PDF report saved at:\n{path}")
+
+        else:
+            self.imp_text.insert(END, f"Cannot preview this file type:\n{fn}")
+
 
     def show_imported_tab(self):
         self.notebook.select(self.imp_tab)

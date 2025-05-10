@@ -157,13 +157,13 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
 
 
 def get_next_filename(patient_name):
-    folder_path = f"deterministic_model_test/{patient_name}"
-    os.makedirs(folder_path, exist_ok=True)  # Ensure folder exists
+    data_folder = f"deterministic_model_test/{patient_name}"
+    os.makedirs(data_folder, exist_ok=True)  # Ensure folder exists
 
     # Get all CSVs for this patient
-    existing_files = [f for f in os.listdir(folder_path) if f.endswith(".csv")]
+    existing_csvs = [f for f in os.listdir(data_folder) if f.endswith(".csv")]
 
-    total_days = len(existing_files)  # How many total days recorded
+    total_days = len(existing_csvs)  # How many total days recorded
 
     week_number = (total_days // 7) + 1  # Week number (every 7 days is a new week)
     day_number = (total_days % 7) + 1     # Day number inside the week (1-7)
@@ -171,7 +171,7 @@ def get_next_filename(patient_name):
     #  Create filename using week and day
     filename = f"{patient_name}_w{week_number}_d{day_number}.csv"
 
-    return os.path.join(folder_path, filename)
+    return os.path.join(data_folder, filename)
 
 
 
@@ -490,23 +490,20 @@ def track_eye_activity(patient_name, tracking_duration=10):
 
 
 # deterministic algorithm
-def check_weekly_prediction(patient_name, min_data_points=30, min_fixations=20, min_blinks=10): #min_saccades=5):
+def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_fixations=20, min_blinks=10): #min_saccades=5):
 
     
 
-    folder_path = f"deterministic_model_test/{patient_name}"
-    files = sorted([f for f in os.listdir(folder_path) if f.endswith(".csv")])
-
-    if len(files) < 7:
-        print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
+    csvs = sorted(f for f in os.listdir(data_folder) if f.endswith(".csv"))
+    if len(csvs) < 7:
         return "Not enough data for deterministic prediction."
 
     speeds, fixations, blink_frequencies, blink_durations = [], [], [], []
     #saccade_counts, saccade_durations = [], []
     total_data_points, total_fixations, total_blinks, total_saccades = 0, 0, 0, 0
 
-    for file in files[-7:]:
-        df = pd.read_csv(os.path.join(folder_path, file))
+    for file in csvs[-7:]:
+        df = pd.read_csv(os.path.join(data_folder, file))
 
 
         # Add this check to avoid crashing!
@@ -604,145 +601,55 @@ def check_weekly_prediction(patient_name, min_data_points=30, min_fixations=20, 
 
 
     
-def plot_weekly_speed_trend(patient_name):
-    folder_path = f"deterministic_model_test/{patient_name}"
+def plot_weekly_speed_trend(patient_name, data_folder, week_number):
     
-    # Ensure folder exists
-    if not os.path.exists(folder_path):
-        print(f"Error: No data found for {patient_name}.")
-        return
-    
-    files = sorted([f for f in os.listdir(folder_path) if f.endswith(".csv")])
-
-
-    if len(files) < 7:
-        print(f"Not enough data for {patient_name}. {len(files)}/7 sessions completed.")
+    # 1️⃣ grab only the last 7 CSVs in data_folder
+    csvs = sorted(f for f in os.listdir(data_folder) if f.endswith(".csv"))
+    if len(csvs) < 7:
+        print(f"Not enough data: {len(csvs)}/7 CSVs.")
         return
 
-    day_numbers = []
-    avg_speeds = []
-    avg_fixations = []
-    avg_blink_freq = []
-    avg_blink_duration = []
-    #avg_saccade_count = []
-    #avg_saccade_duration = []
+    # 2️⃣ compute your four series
+    day_nums, avg_speeds, avg_fixations, avg_blinks, avg_blink_durs = [], [], [], [], []
+    for idx, fn in enumerate(csvs[-7:], start=1):
+        df = pd.read_csv(os.path.join(data_folder, fn))
+        # … your checks here …
+        day_nums.append(idx)
+        avg_speeds.append(df["Speed_mm_per_sec"].mean())
+        avg_fixations.append(df["Fixation_Detected"].sum())
+        avg_blinks.append(df["Blink_Count"].mean())
+        avg_blink_durs.append(df["Blink_Duration"].mean())
 
+    # 3️⃣ helper to save each plot
+    def _save(x, y, ylabel, title, suffix, marker=None):
+        plt.figure(figsize=(8,5))
+        if marker:
+            plt.plot(x, y, marker=marker, linestyle='-')
+        else:
+            plt.scatter(x, y)
+            plt.plot(x, y, linestyle='--', alpha=0.7)
+        plt.title(f"{title} – week {week_number} – {patient_name}")
+        plt.xlabel("Day Number")
+        plt.ylabel(ylabel)
+        plt.xticks(day_nums)
+        plt.grid(True)
+        fname = f"{patient_name}_week{week_number}_{suffix}.png"
+        plt.savefig(os.path.join(data_folder, fname))
+        plt.close()
 
-    for idx, file in enumerate(files[-7:]):
-        df = pd.read_csv(os.path.join(folder_path, file))
+    # 4️⃣ save all four with distinct suffixes
+    _save(day_nums, avg_speeds,     "Speed (mm/sec)",           "Weekly Speed Trend",    "speed_trend")
+    _save(day_nums, avg_fixations,  "Fixation count",           "Weekly Fixation Trend", "fixation_trend",  marker='s')
+    _save(day_nums, avg_blinks,     "Blink freq (blinks/sec)",  "Weekly Blink Freq",     "blink_freq",      marker='^')
+    _save(day_nums, avg_blink_durs, "Blink duration (ms)",      "Weekly Blink Dur",      "blink_dur",       marker='d')
 
-        required_cols = ['Speed_mm_per_sec', 'Fixation_Detected', 'Blink_Count', 'Blink_Duration']
-        if not all(col in df.columns for col in required_cols):
-            print(f"[WARNING] Skipping {file} because it is missing important columns.")
-            continue  # Skip this bad file
-
-        avg_speed = np.mean(df["Speed_mm_per_sec"].dropna())
-        avg_fixation = df["Fixation_Detected"].dropna().sum()
-        avg_blink_f = np.mean(df["Blink_Count"].dropna())
-        avg_blink_d = np.mean(df["Blink_Duration"].dropna())
-        # optional if you still want to include saccade trends
-        #avg_saccade_c = np.mean(df["Saccade_Count"].dropna()) if "Saccade_Count" in df.columns else np.nan
-        #avg_saccade_d = np.mean(df["Saccade_Duration"].dropna()) if "Saccade_Duration" in df.columns else np.nan
-
-        avg_speeds.append(avg_speed)
-        avg_fixations.append(avg_fixation)
-        avg_blink_freq.append(avg_blink_f)
-        avg_blink_duration.append(avg_blink_d)
-        #avg_saccade_count.append(avg_saccade_c)
-        #avg_saccade_duration.append(avg_saccade_d)
-        day_numbers.append(idx + 1)
- 
-        
-    # Generate speed Plot
-    plt.figure(figsize=(8, 5))
-    plt.scatter(day_numbers, avg_speeds, color='blue', label="Average Speed (mm/sec)")
-    plt.plot(day_numbers, avg_speeds, linestyle='--', color='gray', alpha=0.7)
-
-    plt.xlabel("Day Number")
-    plt.ylabel("Average Speed (mm/sec)")
-    plt.title(f"Eye Movement Speed Trend Over 7 Days - {patient_name}")
-    plt.xticks(day_numbers)
-    plt.legend()
-    plt.grid(True)
-
-    # Save & Show Graph
-    graph_path = f"{folder_path}/{patient_name}_weekly_speed_trend.png"
-    plt.savefig(graph_path)
-    #plt.show()
-
-    # Fixation Plot
-    plt.figure(figsize=(8, 5))
-    plt.plot(day_numbers, avg_fixations, marker='s', linestyle='--', color='green', label="Total Fixations")
-    plt.xlabel("Day Number")
-    plt.ylabel("Fixations Count")
-    plt.title(f"Fixation Trend Over 7 Days - {patient_name}")
-    #plt.grid(True)
-     # Save & Show Graph
-    graph_path = f"{folder_path}/{patient_name}_weekly_fixation_trend.png"
-    plt.savefig(graph_path)
-    plt.legend()
-    #plt.show()
-    
-    
-    
-    #  BLINK FREQUENCY TREND PLOT
-    plt.figure(figsize=(8, 5))
-    plt.plot(day_numbers, avg_blink_freq, marker='^', linestyle='-', color='purple', label="Blink Frequency (blinks/sec)")
-    plt.xlabel("Day Number")
-    plt.ylabel("Blink Frequency (blinks/sec)")
-    plt.title(f"Blink Frequency Trend Over 7 Days - {patient_name}")
-    plt.xticks(day_numbers)
-    plt.legend()
-    plt.grid(True)
-    graph_path = f"{folder_path}/{patient_name}_blinking_frequency_trend.png"
-    plt.savefig(graph_path)
-    
-    #plt.show()
-
-    #  BLINK DURATION TREND PLOT
-    plt.figure(figsize=(8, 5))
-    plt.plot(day_numbers, avg_blink_duration,marker='d', linestyle='-', color='red', label="Blink Duration (ms)")
-    plt.xlabel("Day Number")
-    plt.ylabel("Blink Duration (ms)")
-    plt.title(f"Blink Duration Trend Over 7 Days - {patient_name}")
-    plt.xticks(day_numbers)
-    plt.legend()
-    plt.grid(True)
-    graph_path = f"{folder_path}/{patient_name}_blink_duration_trend.png"
-    plt.savefig(graph_path)
-    
-    #plt.show()
-
-#  PLOT SACCADE COUNT TREND (NEW!)
-    #plt.figure(figsize=(8, 5))
-    #plt.plot(day_numbers, avg_saccade_count, marker='*', linestyle='-', color='orange', label="Saccade Count")
-    #plt.xlabel("Day Number")
-    #plt.ylabel("Saccades per Session")
-    #plt.title(f"Saccade Count Trend Over 7 Days - {patient_name}")
-    #plt.legend()
-    #plt.grid(True)
-    #graph_path = f"{folder_path}/{patient_name}_saccade_count_trend.png"
-    #plt.savefig(graph_path)
-    
-    #plt.show()
-
-    #  PLOT SACCADE DURATION TREND (NEW!)
-    #plt.figure(figsize=(8, 5))
-    #plt.plot(day_numbers, avg_saccade_duration, marker='h', linestyle='-', color='brown', label="Saccade Duration (ms)")
-    #plt.xlabel("Day Number")
-    #plt.ylabel("Saccade Duration (ms)")
-    #plt.title(f"Saccade Duration Trend Over 7 Days - {patient_name}")
-    #plt.legend()
-    #plt.grid(True)
-    #graph_path = f"{folder_path}/{patient_name}_saccade_duration_trend.png"
-    #plt.savefig(graph_path)
-    
-    #plt.show()
+    print(f"[INFO] Saved week {week_number} graphs into {data_folder}")
 
 
 
 
-def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, folder_path):
+
+def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, data_folder):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -769,7 +676,7 @@ def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_
     pdf.ln(5)
 
     # Save the file
-    report_path = os.path.join(folder_path, f"{patient_name}_weekly_report_Week{week_number}.pdf")
+    report_path = os.path.join(data_folder, f"{patient_name}_weekly_report_Week{week_number}.pdf")
     pdf.output(report_path)
 
     print(f"[INFO] PDF report saved to: {report_path}")
@@ -777,8 +684,8 @@ def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_
 
 
 def generate_monthly_report(patient_name):
-    folder_path = f"deterministic_model_test/{patient_name}"
-    summary_file = os.path.join(folder_path, "weekly_summary.csv")
+    data_folder = f"deterministic_model_test/{patient_name}"
+    summary_file = os.path.join(data_folder, "weekly_summary.csv")
 
     if not os.path.exists(summary_file):
         print("[INFO] No weekly summaries found. Skipping monthly report.")
@@ -834,15 +741,15 @@ def generate_monthly_report(patient_name):
     pdf.multi_cell(0, 10, f"Trend Analysis: {trend}")
 
     # Save the PDF
-    monthly_report_path = os.path.join(folder_path, f"{patient_name}_Monthly_Report.pdf")
+    monthly_report_path = os.path.join(data_folder, f"{patient_name}_Monthly_Report.pdf")
     pdf.output(monthly_report_path)
 
     print(f"[INFO] Monthly report saved to: {monthly_report_path}")
 
 
 def save_weekly_summary(patient_name, week_number, prediction):
-    folder_path = f"deterministic_model_test/{patient_name}"
-    summary_file = os.path.join(folder_path, "weekly_summary.csv")
+    data_folder = f"deterministic_model_test/{patient_name}"
+    summary_file = os.path.join(data_folder, "weekly_summary.csv")
 
     # Create the file if it doesn't exist
     if not os.path.exists(summary_file):
@@ -854,87 +761,78 @@ def save_weekly_summary(patient_name, week_number, prediction):
         file.write(f"{week_number},{prediction}\n")
 
 
-def import_existing_data_and_generate_report(patient_name, folder_path):
-    
+def import_existing_data_and_generate_report(patient_name, session_folder):
+    """
+    patient_name:    the user’s ID (e.g. "dog")
+    session_folder:  the path to imported/<patient><n>/
+    """
+    # 1️⃣ Gather CSVs from this session folder
+    csvs = sorted(f for f in os.listdir(session_folder) if f.lower().endswith(".csv"))
+    num_csv = len(csvs)
+    print(f"[INFO] Found {num_csv} CSV(s) in session {session_folder}")
 
-    patient_folder = f"deterministic_model_test/{patient_name}"
-    os.makedirs(patient_folder, exist_ok=True)
+    # Only proceed once we have a full week
+    if num_csv < 7:
+        print(f"[INFO] Only {num_csv} CSV(s) in {session_folder}, skipping report.")
+        return
 
-    # Copy all CSVs
-    for file in os.listdir(folder_path):
-        if file.endswith(".csv"):
-            src = os.path.join(folder_path, file)
-            dst = os.path.join(patient_folder, file)
-            if not os.path.exists(dst):
-                shutil.copy(src, dst)
+    # compute week number
+    week_number = num_csv // 7
 
-    print(f"[INFO] Imported {len(os.listdir(folder_path))} CSV files into {patient_folder}")
+    # 2️⃣ Run the deterministic check on these 7+ files
+    det_pred = check_weekly_prediction(
+        patient_name,
+        data_folder=session_folder
+    )
 
-    # --- After importing files
-    num_csv = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")])
-    if num_csv >= 7:
-        deterministic_prediction = check_weekly_prediction(patient_name)
-        plot_weekly_speed_trend(patient_name)
+    # 3️⃣ Plot into the same session folder
+    plot_weekly_speed_trend(
+        patient_name,
+        data_folder=session_folder,
+        week_number=week_number
+    )
 
-        # Instead of calling run_ai_model_on_week, do it manually:
-        all_data = []
-        for file in sorted(os.listdir(patient_folder)):
-            if file.endswith(".csv"):
-                df = pd.read_csv(os.path.join(patient_folder, file))
-                required_columns = [
-                    'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
-                    'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
-                    'fixation_duration', 'Blink_Count', 'Blink_Duration']
-                    #'Saccade_Count', 'Saccade_Duration'
-                
-                missing_cols = [col for col in required_columns if col not in df.columns]
+    # 4️⃣ Build the AI prediction
+    all_data = []
+    for fn in csvs:
+        df = pd.read_csv(os.path.join(session_folder, fn))
+        required = [
+            'Left_Pupil_X','Left_Pupil_Y','Right_Pupil_X','Right_Pupil_Y',
+            'Speed_px_per_sec','Speed_mm_per_sec','Speed_deg_per_sec',
+            'fixation_duration','Blink_Count','Blink_Duration'
+        ]
+        if all(c in df.columns for c in required):
+            all_data.append(df[required])
+        else:
+            print(f"[WARNING] Skipping {fn}, missing columns")
 
-                if missing_cols:
-                    print(f"[WARNING] Skipping {file} because missing columns: {missing_cols}")
-                else:
-                    all_data.append(df[required_columns])
+    ai_pred = "Inconclusive"
+    if all_data:
+        combined = pd.concat(all_data, ignore_index=True).dropna()
+        if not combined.empty:
+            scaler = joblib.load("scaler.pkl")
+            cls = int(cognitive_model.predict(scaler.transform(combined.values))[0])
+            ai_pred = "IMPAIRED" if cls == 0 else "HEALTHY"
+
+    # 5️⃣ Generate the PDF in this session folder
+    generate_pdf_report(
+        patient_name,
+        week_number,
+        det_pred,
+        ai_pred,
+        data_folder=session_folder
+    )
+
+    # 6️⃣ Append to weekly_summary.csv right next to the CSVs
+    summary_csv = os.path.join(session_folder, "weekly_summary.csv")
+    if not os.path.exists(summary_csv):
+        with open(summary_csv, "w") as f:
+            f.write("Week,Prediction\n")
+    with open(summary_csv, "a") as f:
+        f.write(f"{week_number},{det_pred}\n")
 
 
-        ai_prediction = "Inconclusive"
-        if all_data:
-            combined_df = pd.concat(all_data, ignore_index=True)
-            selected_features = [
-                'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
-                'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
-                'fixation_duration', 'Blink_Count', 'Blink_Duration'
-            ]
-            combined_df = combined_df[selected_features]
 
-            # Drop any rows with missing values before scaling
-            combined_df = combined_df.dropna()
-            if not combined_df.empty:
-                try:
-                    scaler = joblib.load('scaler.pkl')
-                    features = combined_df.values
-                    features_scaled = scaler.transform(features)
-                    prediction = cognitive_model.predict(features_scaled)
-                    predicted_class = int(prediction[0])
-                    ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
-                except Exception as e:
-                    print(f"[WARNING] AI prediction failed, marking Inconclusive: {e}")
-            else:
-                print("[WARNING] No complete rows for AI—marking Inconclusive.")
-        # Debug prints
-        print("[DEBUG] Deterministic Prediction:", deterministic_prediction)
-        print("[DEBUG] AI Prediction:", ai_prediction)
-        
-
-        week_number = num_csv // 7
-
-        # AI model always inconclusive
-        generate_pdf_report(
-            patient_name,
-            week_number,
-            deterministic_prediction,
-            ai_prediction,
-            patient_folder
-        )
-        save_weekly_summary(patient_name, week_number, deterministic_prediction)
 
 
 
@@ -948,7 +846,7 @@ if __name__ == "__main__":
     while True:
         print("\nWhat would you like to do?")
         print("1. Run New Test (using webcam)")
-        print("2. Import Folder of CSV Files and Generate Report")
+        print("2. Import Folder of CSV csvs and Generate Report")
         print("3. Exit Program")
 
         choice = input("Enter your choice (1/2/3): ").strip()
@@ -1023,8 +921,8 @@ if __name__ == "__main__":
                 print("Error: Patient name cannot be empty.")
 
         elif choice == "2":
-            # IMPORT CSV FILES/PATH
-            folder_to_import = input("Enter path to folder containing CSV files: ").strip()
+            # IMPORT CSV csvs/PATH
+            folder_to_import = input("Enter path to folder containing CSV csvs: ").strip()
             target_patient_name = input("Enter target patient name: ").strip()
 
             import_existing_data_and_generate_report(target_patient_name, folder_to_import)
