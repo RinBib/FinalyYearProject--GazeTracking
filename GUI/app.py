@@ -717,7 +717,7 @@ class ViewDataPage(BasePage):
 
         elif ext in (".png", ".jpg", ".jpeg"):
             # display image inline
-            img = Image.open(path).resize((300, 300), Image.LANCZOS)
+            img = Image.open(path).resize((400, 400), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             # insert into text widget
             self.rt_text.image_create("1.0", image=photo)

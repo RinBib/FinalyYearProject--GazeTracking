@@ -494,7 +494,12 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
 
     
 
-    csvs = sorted(f for f in os.listdir(data_folder) if f.endswith(".csv"))
+    csvs = sorted(
+        f for f in os.listdir(data_folder)
+        if f.lower().endswith(".csv")
+        and not f.lower().startswith("weekly_summary")
+    )
+
     if len(csvs) < 7:
         return "Not enough data for deterministic prediction."
 
@@ -604,7 +609,14 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
 def plot_weekly_speed_trend(patient_name, data_folder, week_number):
     
     
-    csvs = sorted(f for f in os.listdir(data_folder) if f.endswith(".csv"))
+        
+    csvs = sorted(
+        f for f in os.listdir(data_folder)
+        if f.lower().endswith(".csv")
+        and not f.lower().startswith("weekly_summary")
+        and not f.lower().startswith("monthly_report")
+    )
+
     if len(csvs) < 7:
         print(f"Not enough data: {len(csvs)}/7 CSVs.")
         return
@@ -682,69 +694,44 @@ def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_
     print(f"[INFO] PDF report saved to: {report_path}")
 
 
-
-def generate_monthly_report(patient_name):
-    data_folder = f"deterministic_model_test/{patient_name}"
+def generate_monthly_report(patient_name, data_folder):
+    """
+    patient_name: your user id
+    data_folder: the folder where weekly_summary.csv lives
+    """
     summary_file = os.path.join(data_folder, "weekly_summary.csv")
-
     if not os.path.exists(summary_file):
         print("[INFO] No weekly summaries found. Skipping monthly report.")
         return
 
     df = pd.read_csv(summary_file)
-
     if len(df) < 4:
-        print("[INFO] Not enough weeks (4) completed for monthly report.")
+        print("[INFO] Need at least 4 weeks for a monthly report.")
         return
 
-    
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-
-    pdf.cell(200, 10, txt=f"Monthly Cognitive Report - {patient_name}", ln=True, align='C')
-    pdf.ln(10)
-    pdf.cell(200, 10, txt=f"Date and Time: {now}", ln=True)
-    pdf.ln(10)
-
-    # Add each week's prediction
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12)
+    pdf.cell(200,10, f"Monthly Cognitive Report – {patient_name}", ln=1, align='C')
+    pdf.ln(5); pdf.cell(200,10, f"Generated: {now}", ln=1)
+    pdf.ln(5)
     for idx, row in df.iterrows():
-        week = row['Week']
-        prediction = row['Prediction']
-        pdf.cell(200, 10, txt=f"Week {int(week)}: {prediction}", ln=True)
+        pdf.cell(0,8, f"Week {int(row['Week'])}: {row['Prediction']}", ln=1)
+    pdf.ln(5)
 
-    pdf.ln(10)
+    # simple trend
+    scores = row['Prediction'].map({
+      "Normal Eye Movement (Healthy)": 3,
+      "Possible Cognitive Impairment (… )": 0,
+      # …etc
+    })
+    first, second = scores[:2].mean(), scores[2:].mean()
+    trend = ("improving" if second>first else "declining" if second<first else "stable")
+    pdf.multi_cell(0,8, f"Overall trend: {trend}.")
 
-    # Trend analysis
-    label_to_score = {
-        "Normal Eye Movement": 3,
-        "Possible Restlessness / Attention Issues": 2,
-        "Possible Fatigue / Drowsiness": 2,
-        "Possible Attention Deficit / High Cognitive Load": 1,
-        "Possible Neurological Disorder (Check Medical Attention)": 0
-    }
-    df['Score'] = df['Prediction'].map(label_to_score)
+    out = os.path.join(data_folder, f"{patient_name}_Monthly_Report.pdf")
+    pdf.output(out)
+    print(f"[INFO] Monthly report saved to {out}")
 
-    first_half = df['Score'][:2].mean()
-    second_half = df['Score'][2:].mean()
-
-    trend = ""
-    if second_half > first_half:
-        trend = "Cognitive performance is improving over the month."
-    elif second_half < first_half:
-        trend = "Cognitive performance is declining over the month."
-    else:
-        trend = "No clear trend detected."
-
-    pdf.multi_cell(0, 10, f"Trend Analysis: {trend}")
-
-    # Save the PDF
-    monthly_report_path = os.path.join(data_folder, f"{patient_name}_Monthly_Report.pdf")
-    pdf.output(monthly_report_path)
-
-    print(f"[INFO] Monthly report saved to: {monthly_report_path}")
 
 
 def save_weekly_summary(patient_name, week_number, prediction):
@@ -821,12 +808,36 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
     )
 
     
+        
+
+    # 
     summary_csv = os.path.join(session_folder, "weekly_summary.csv")
     if not os.path.exists(summary_csv):
         with open(summary_csv, "w") as f:
             f.write("Week,Prediction\n")
+
+    # **now** that we’ve ensured the file exists, read it and check for 4+ weeks
+    df_session = pd.read_csv(summary_csv)
+    if len(df_session) >= 4:
+        # generate a monthly report inside the session folder
+        generate_monthly_report(patient_name, session_folder)
+
+    # always append this week’s entry
     with open(summary_csv, "a") as f:
         f.write(f"{week_number},{det_pred}\n")
+
+    # ── Also update the *root* summary at deterministic_model_test/<patient>/weekly_summary.csv
+    root_folder    = os.path.join("deterministic_model_test", patient_name)
+    root_summary   = os.path.join(root_folder, "weekly_summary.csv")
+
+    # reuse your helper to create/append
+    save_weekly_summary(patient_name, week_number, det_pred)
+
+    # now check the root for a 4-week trigger
+    df_root = pd.read_csv(root_summary)
+    if len(df_root) >= 4:
+        # this writes to deterministic_model_test/<patient>/
+        generate_monthly_report(patient_name)
 
 
 
