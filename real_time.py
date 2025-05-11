@@ -8,7 +8,9 @@ from datetime import datetime
 import sys
 import time  
 import math  
-import pandas as pd  
+import pandas as pd 
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt  
 import dlib
 from gaze_tracking import GazeTracking
@@ -16,6 +18,7 @@ from gaze_tracking.fixation import FixationDetector
 from fpdf import FPDF
 import shutil
 import joblib
+
 
  # Load the Random Forest model
 cognitive_model = joblib.load('logistic_model.joblib') 
@@ -177,7 +180,7 @@ def get_next_filename(patient_name):
 
 
 
-def track_eye_activity(patient_name, tracking_duration=10):
+def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
     log_file = get_next_filename(patient_name)
     initialize_csv(log_file, ["Timestamp", "Left_Pupil_X", "Left_Pupil_Y",
                               "Right_Pupil_X", "Right_Pupil_Y", "Speed_px_per_sec",
@@ -222,6 +225,9 @@ def track_eye_activity(patient_name, tracking_duration=10):
         ret, frame = webcam.read()
         if not ret:
             break
+        
+        if frame_callback:
+            frame_callback(frame.copy())
 
         # Convert frame to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -474,7 +480,11 @@ def track_eye_activity(patient_name, tracking_duration=10):
             #  Resume normal timer if user moves closer
             remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time))
 
-        cv2.imshow("Eye Speed, Fixation, Blinking and Tracking", frame)
+        if frame_callback:
+            
+            frame_callback(frame.copy())
+        else:
+            cv2.imshow("Eye Speed, Fixation, Blinking and Tracking", frame)
 
 
         # Stop when time is up
@@ -695,10 +705,7 @@ def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_
 
 
 def generate_monthly_report(patient_name, data_folder):
-    """
-    patient_name: your user id
-    data_folder: the folder where weekly_summary.csv lives
-    """
+    
     summary_file = os.path.join(data_folder, "weekly_summary.csv")
     if not os.path.exists(summary_file):
         print("[INFO] No weekly summaries found. Skipping monthly report.")
@@ -706,31 +713,57 @@ def generate_monthly_report(patient_name, data_folder):
 
     df = pd.read_csv(summary_file)
     if len(df) < 4:
-        print("[INFO] Need at least 4 weeks for a monthly report.")
+        print("[INFO] Not enough weeks (<4) in summary; skipping monthly report.")
         return
 
+    # Setup PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Use a plain hyphen here
+    pdf.cell(200, 10, txt=f"Monthly Cognitive Report - {patient_name}", ln=True, align="C")
+    pdf.ln(10)
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12)
-    pdf.cell(200,10, f"Monthly Cognitive Report – {patient_name}", ln=1, align='C')
-    pdf.ln(5); pdf.cell(200,10, f"Generated: {now}", ln=1)
-    pdf.ln(5)
-    for idx, row in df.iterrows():
-        pdf.cell(0,8, f"Week {int(row['Week'])}: {row['Prediction']}", ln=1)
-    pdf.ln(5)
+    pdf.cell(200, 10, txt=f"Date and Time: {now}", ln=True)
+    pdf.ln(10)
 
-    # simple trend
-    scores = row['Prediction'].map({
-      "Normal Eye Movement (Healthy)": 3,
-      "Possible Cognitive Impairment (… )": 0,
-      # …etc
-    })
-    first, second = scores[:2].mean(), scores[2:].mean()
-    trend = ("improving" if second>first else "declining" if second<first else "stable")
-    pdf.multi_cell(0,8, f"Overall trend: {trend}.")
+    # Write each week's entry
+    for _, row in df.iterrows():
+        week = int(row["Week"])
+        pred = row["Prediction"]
+        pdf.cell(200, 10, txt=f"Week {week}: {pred}", ln=True)
+    pdf.ln(10)
 
-    out = os.path.join(data_folder, f"{patient_name}_Monthly_Report.pdf")
-    pdf.output(out)
-    print(f"[INFO] Monthly report saved to {out}")
+    # Map predictions to numeric scores
+    label_to_score = {
+        "Normal Eye Movement (Healthy)": 3,
+        "Possible Restlessness / Attention Issues": 2,
+        "Possible Fatigue / Drowsiness": 2,
+        "Possible Attention Deficit / High Cognitive Load": 1,
+        "Possible Neurological Disorder (Check Medical Attention)": 0
+    }
+    # **This** is the key: do .map on the Series, not on row
+    df["Score"] = df["Prediction"].map(label_to_score)
+
+    first_half = df["Score"].iloc[:2].mean()
+    second_half = df["Score"].iloc[2:].mean()
+
+    if second_half > first_half:
+        trend = "Cognitive performance is improving over the month."
+    elif second_half < first_half:
+        trend = "Cognitive performance is declining over the month."
+    else:
+        trend = "No clear trend detected."
+
+    pdf.multi_cell(0, 10, f"Trend Analysis: {trend}")
+
+    # Save
+    monthly_report_path = os.path.join(data_folder, f"{patient_name}_Monthly_Report.pdf")
+    pdf.output(monthly_report_path)
+    print(f"[INFO] Monthly report saved to: {monthly_report_path}")
+
 
 
 
@@ -808,44 +841,31 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
     )
 
     
-        
-
-    # 
+    # 1️⃣ Ensure the session‐level weekly_summary.csv exists
     summary_csv = os.path.join(session_folder, "weekly_summary.csv")
     if not os.path.exists(summary_csv):
         with open(summary_csv, "w") as f:
             f.write("Week,Prediction\n")
 
-    # **now** that we’ve ensured the file exists, read it and check for 4+ weeks
+    # 2️⃣ Read it back and check if this session has reached 4 weeks
     df_session = pd.read_csv(summary_csv)
     if len(df_session) >= 4:
-        # generate a monthly report inside the session folder
+        # generate a session‐level monthly report
         generate_monthly_report(patient_name, session_folder)
 
-    # always append this week’s entry
+    # 3️⃣ Append this week to the session summary
     with open(summary_csv, "a") as f:
         f.write(f"{week_number},{det_pred}\n")
 
-    # ── Also update the *root* summary at deterministic_model_test/<patient>/weekly_summary.csv
-    root_folder    = os.path.join("deterministic_model_test", patient_name)
-    root_summary   = os.path.join(root_folder, "weekly_summary.csv")
-
-    # reuse your helper to create/append
+    # 4️⃣ Now update the **root** summary at deterministic_model_test/<patient>/
+    root_folder  = os.path.join("deterministic_model_test", patient_name)
+    root_summary = os.path.join(root_folder, "weekly_summary.csv")
     save_weekly_summary(patient_name, week_number, det_pred)
 
-    # now check the root for a 4-week trigger
+    # 5️⃣ Re‐read the root summary and, if it now has 4+ weeks, generate a month
     df_root = pd.read_csv(root_summary)
     if len(df_root) >= 4:
-        # this writes to deterministic_model_test/<patient>/
-        generate_monthly_report(patient_name)
-
-
-
-
-
-
-
-
+        generate_monthly_report(patient_name, root_folder)
 
 
 

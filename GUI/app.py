@@ -13,7 +13,9 @@ import tkinter.font as tkfont
 from auth import register_user, verify_user, get_user_name
 import tkinter.font as tkfont
 import tkinter as tk
-
+import threading
+import cv2
+import time
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -363,47 +365,181 @@ class InstructionPage(BasePage):
         
 
     def _start_test(self):
-        
         patient_name = (
             self.controller.current_user_name
             or self.controller.current_user_email
             or "UnknownUser"
         )
-
-        
         user_folder = os.path.join("deterministic_model_test", patient_name)
         os.makedirs(user_folder, exist_ok=True)
 
-       
-        track_eye_activity(patient_name, tracking_duration=10)
+        # get the TestPage and show it
+        test_page = self.controller.frames["TestPage"]
+        self.controller.show_frame("TestPage")
+
+        test_page.begin_countdown(5)
+        
+        # run in background so the UI doesn’t freeze
+        def worker():
+            # 1. live‐tracking, pushing frames to test_page.update_frame
+            track_eye_activity(patient_name, tracking_duration=10, frame_callback=test_page.update_frame)
+
+            # 2. once done, generate your CSV‐import/weekly report
+            import_existing_data_and_generate_report(patient_name, user_folder)
+
+            # 3. then switch to the “ViewDataPage” on the main thread
+            self.controller.after(0, lambda: self._finish_test(patient_name))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_test(self):
+        patient_name = (
+        self.controller.current_user_name
+        or self.controller.current_user_email
+        or "UnknownUser"
+        )
+        view = self.controller.frames["ViewDataPage"]
+        view.refresh_all()
+        view._populate_rt()
 
         
-        import_existing_data_and_generate_report(patient_name, user_folder)
-
-        
-        view_page = self.controller.frames["ViewDataPage"]
-        view_page._populate_rt()
-        roots = view_page.rt_tree.get_children()
+        roots = view.rt_tree.get_children()
         if roots:
-            files = view_page.rt_tree.get_children(roots[0])
+            files = view.rt_tree.get_children(roots[0])
             if files:
-                view_page.rt_tree.selection_set(files[-1])
-                view_page._on_rt_select(None)
+                view.rt_tree.selection_set(files[-1])
+                view._on_rt_select(None)
 
-        #  switch to the Real-Time tab
+       
+        view.notebook.select(view.rt_tab)
         self.controller.show_frame("ViewDataPage")
+
+
 
 
 class TestPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
-        # placeholder
-        tb.Label(
+        self.controller = controller
+        self.preview_size = (640, 480)
+
+        # Use tk.Label so we can fine‐tune borders & highlight
+        self.video_label = tk.Label(
             self,
-            text="Running the test…",
-            font=("Poppins", 18),
-            foreground="#ccd6f6"
-        ).pack(pady=200)
+            bg="black",
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat"
+        )
+        self.video_label.place(
+            relx=0.5, rely=0.5,
+            width=self.preview_size[0],
+            height=self.preview_size[1],
+            anchor="center"
+        )
+
+    def begin_countdown(self, seconds=5):
+        if seconds > 0:
+            self.video_label.config(
+                text=str(seconds),
+                font=("Poppins", 72, "bold"),
+                fg="white",
+                image=""  # clear any old frame
+            )
+            self.after(1000, self.begin_countdown, seconds - 1)
+        else:
+            self.video_label.config(text="", image="")
+            threading.Thread(target=self._run_full_test, daemon=True).start()
+
+    def _update_frame(self, bgr_frame):
+        now = time.time()
+        if hasattr(self, "_last_update") and now - self._last_update < 1/20:
+            return
+        self._last_update = now
+
+        w, h = self.preview_size
+        frame = cv2.resize(bgr_frame, (w, h))
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(rgb)
+        photo = ImageTk.PhotoImage(img)
+
+        self.video_label.config(image=photo, text="")
+        self.video_label.image = photo
+
+    def _run_full_test(self):
+        patient = self.controller.current_user_name or self.controller.current_user_email or "UnknownUser"
+        folder = os.path.join("deterministic_model_test", patient)
+        os.makedirs(folder, exist_ok=True)
+
+        track_eye_activity(
+            patient_name=patient,
+            tracking_duration=10,
+            frame_callback=self._update_frame
+        )
+        import_existing_data_and_generate_report(patient, folder)
+        self.after(0, self._finish_test)
+
+    def _finish_test(self):
+        view = self.controller.frames["ViewDataPage"]
+        view.refresh_all()
+        roots = view.rt_tree.get_children()
+        if roots:
+            files = view.rt_tree.get_children(roots[0])
+            if files:
+                view.rt_tree.selection_set(files[-1])
+                view._on_rt_select(None)
+
+        self.controller.show_frame("ViewDataPage")
+        view.notebook.select(view.rt_tab)
+
+
+
+
+class LiveTestPage(BasePage):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
+
+        tb.Label(self, text="Running test...", font=("Poppins", 18), foreground="#ccd6f6")\
+          .pack(pady=10)
+
+        # Canvas to draw video frames
+        self.canvas = tk.Canvas(self, width=640, height=480)
+        self.canvas.pack()
+        self.photo_image = None  # keep a reference
+
+    def on_show(self):
+        # Called every time this page is raised
+        user = self.controller.current_user_name or self.controller.current_user_email
+        # spawn the tracking thread so we don't block the UI
+        threading.Thread(target=self._run_test, args=(user,), daemon=True).start()
+
+    def _run_test(self, patient_name):
+        # run your tracking loop, but pass in a callback to get each frame
+        def _frame_callback(cv_frame):
+            # convert BGR to PIL image
+            rgb = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(rgb)
+            img = img.resize((640,480), Image.LANCZOS)
+            self.photo_image = ImageTk.PhotoImage(img)
+            # update canvas on the main thread
+            self.canvas.after(0, lambda: self.canvas.create_image(0,0,anchor="nw",image=self.photo_image))
+
+        # *** you'll need to modify track_eye_activity to accept a callback ***
+        track_eye_activity(patient_name,
+                           tracking_duration=10,
+                           frame_callback=_frame_callback)
+
+        # when done, import & generate report
+        session_folder = os.path.join("deterministic_model_test", patient_name)
+        import_existing_data_and_generate_report(patient_name, session_folder)
+
+        # finally switch to the view data page
+        self.after(0, lambda: self.controller.show_frame("ViewDataPage"))
+
+
+
+
+
 
         
 class ImportPage(BasePage):
@@ -926,7 +1062,7 @@ class EyeTrackingApp(tb.Window):
         self.main_frame.pack(fill=BOTH, expand=True)
 
         self.frames = {}
-        for F in (LoginPage, HomePage, InstructionPage, ViewDataPage, ImportPage, SettingsPage, AboutPage):
+        for F in (LoginPage, HomePage, InstructionPage, TestPage, ViewDataPage, ImportPage, SettingsPage, AboutPage):
             frame = F(parent=self.main_frame, controller=self)
             self.frames[F.__name__] = frame
             frame.place(relwidth=1, relheight=1)
