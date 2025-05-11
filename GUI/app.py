@@ -34,9 +34,13 @@ class LoginPage(tb.Frame):
         self.name_var = tk.StringVar()
         self.remember_var = tk.BooleanVar(value=False)
         self.msg_var = tk.StringVar()
+        
+        # Label Title for the app
+        self.app_title = tb.Label(self, text="Cognitive Eye Tracker", font=("Poppins", 24), foreground="#ccd6f6")
+        self.app_title.pack(pady=(30, 20))  
 
         self.nb = tb.Notebook(self, bootstyle="secondary.TNotebook")
-        self.nb.place(relx=0.5, rely=0.2, anchor='n', width=420, height=360)
+        self.nb.place(relx=0.5, rely=0.25, anchor='n', width=420, height=360)
 
         login_tab = tb.Frame(self.nb)
         self.nb.add(login_tab, text="Log In")
@@ -279,7 +283,7 @@ class HomePage(BasePage):
         # Title under GIF
         tb.Label(self,
                  text="Cognitive Eye Tracker",
-                 font=("Poppins", 24, "bold"),
+                 font=("Poppins", 24),
                  foreground="#ccd6f6").pack(pady=(0, 20))
 
         # Start / Exit
