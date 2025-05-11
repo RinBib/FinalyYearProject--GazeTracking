@@ -69,13 +69,29 @@ class LoginPage(tb.Frame):
         tb.Entry(frame, textvariable=self.pw_var, show="*", font=("Poppins", 10))\
           .grid(row=1, column=1, sticky='we', pady=5, padx=(5, 10))
 
+        tk.Checkbutton(
+            frame,
+            text="Keep me logged in",
+            variable=self.remember_var,
+            font=("Poppins", 8),
+            bg="#273746",
+            fg="#ccd6f6",
+            selectcolor="#0a192f",
+            activebackground="#273746",
+            activeforeground="#ccd6f6",
+            borderwidth=0,
+            highlightthickness=0
+        ).grid(row=2, column=0, columnspan=2, pady=10)
+
+
+
         tb.Button(
             frame,
             text="Log In",
             bootstyle="dark",  # uses Primary.TButton
             width=20,
             command=self._on_login
-        ).grid(row=3, column=0, columnspan=2, pady=(20, 30))
+        ).grid(row=3, column=0, columnspan=2, pady=(67, 77))
 
     def _build_signup_grid(self, frame):
         frame.columnconfigure(0, weight=1, minsize=120)
@@ -99,6 +115,22 @@ class LoginPage(tb.Frame):
         # Bind mouse hover events to show tooltip
         password_entry.bind("<Enter>", lambda e: self.show_password_tooltip(password_entry))
         password_entry.bind("<Leave>", lambda e: self.hide_password_tooltip())
+
+
+        tk.Checkbutton(
+            frame,
+            text="Keep me logged in",
+            variable=self.remember_var,
+            font=("Poppins", 8),
+            bg="#273746",
+            fg="#ccd6f6",
+            selectcolor="#0a192f",
+            activebackground="#273746",
+            activeforeground="#ccd6f6",
+            borderwidth=0,
+            highlightthickness=0
+        ).grid(row=3, column=0, columnspan=2, pady=10)
+
 
         tb.Button(
             frame,
@@ -516,13 +548,7 @@ class LiveTestPage(BasePage):
 
         # finally switch to the view data page
         self.after(0, lambda: self.controller.show_frame("ViewDataPage"))
-
-
-
-
-
-
-        
+     
 class ImportPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
