@@ -17,8 +17,8 @@ make sure files save per user                                                   
 import works for algorithm                                                                           DONE
 test works for algorithm                                                                             DONE
 testing inside UI -  maybe                                                                           DONE
-about section -  fill
-hashing -evie - add
+about section -  fill                                                                                DONE
+hashing -evie - add                                                                                  DONE
 user test - evie
 gant chart
 presentation
