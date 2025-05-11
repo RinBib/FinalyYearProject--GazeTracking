@@ -14,10 +14,13 @@ compare ai model and algo model
 NOTES FOR UI:
 panel sizing is the same for both tabs - wont work gon naleave it for now                            DONE
 make sure files save per user                                                                        DONE
-import works for algorithm
-test works for algorithm  
-testing inside UI -  maybe
+import works for algorithm                                                                           DONE
+test works for algorithm                                                                             DONE
+testing inside UI -  maybe                                                                           DONE
 about section -  fill
 hashing -evie - add
-
-
+user test - evie
+gant chart
+presentation
+update github
+checks

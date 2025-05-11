@@ -373,13 +373,13 @@ class InstructionPage(BasePage):
         user_folder = os.path.join("deterministic_model_test", patient_name)
         os.makedirs(user_folder, exist_ok=True)
 
-        # get the TestPage and show it
+        # show test page
         test_page = self.controller.frames["TestPage"]
         self.controller.show_frame("TestPage")
 
         test_page.begin_countdown(5)
         
-        # run in background so the UI doesn’t freeze
+        
         def worker():
             # 1. live‐tracking, pushing frames to test_page.update_frame
             track_eye_activity(patient_name, tracking_duration=10, frame_callback=test_page.update_frame)
@@ -746,10 +746,15 @@ class AboutPage(BasePage):
         # About text
         about_text = (
             "Cognitive Eye Tracker v1.0\n\n"
-            "............................\n\n"
-            "............................\n\n"
-            "............................\n\n"
-            "............................\n\n"
+            "Dementia is a progressive neurological condition where there is\n"
+            "loss of intellectual function, memory impairment, behavioural changes and\n"
+            "astract reasoning, usually stemmed from disease of the brain.\n\n"
+            "Recent research demonstrates, subbtle changes in eye movement, such as:\n"
+            "fixations, blink patterns, saccades and speed, can detect early cognitive\n"
+            "symptoms. By continuously gathering gaze metrics, this app seeks trends, weekly\n"
+            "and monthly, that may flag early signs of cognitive decline.\n\n"
+            "Our intention is to create a non-invasive, secure and age inclusive approach,\n"
+            "which offers caregivers, parents and clinicians insights to a users long-term cognitive health\n\n"
             "© 2025 All rights reserved."
         )
         tb.Label(self,
@@ -758,7 +763,7 @@ class AboutPage(BasePage):
                  foreground="#ffffff",
                  background="#0a192f",
                  justify="center",
-                 wraplength=500)\
+                 wraplength=750)\
           .pack(padx=40, pady=20)
      
      
