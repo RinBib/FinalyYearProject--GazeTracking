@@ -841,28 +841,28 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
     )
 
     
-    # 1️⃣ Ensure the session‐level weekly_summary.csv exists
+    # does sumary exist
     summary_csv = os.path.join(session_folder, "weekly_summary.csv")
     if not os.path.exists(summary_csv):
         with open(summary_csv, "w") as f:
             f.write("Week,Prediction\n")
 
-    # 2️⃣ Read it back and check if this session has reached 4 weeks
+    # if more than 4 weeks
     df_session = pd.read_csv(summary_csv)
     if len(df_session) >= 4:
         # generate a session‐level monthly report
         generate_monthly_report(patient_name, session_folder)
 
-    # 3️⃣ Append this week to the session summary
+    # append to week
     with open(summary_csv, "a") as f:
         f.write(f"{week_number},{det_pred}\n")
 
-    # 4️⃣ Now update the **root** summary at deterministic_model_test/<patient>/
+    # updating root
     root_folder  = os.path.join("deterministic_model_test", patient_name)
     root_summary = os.path.join(root_folder, "weekly_summary.csv")
     save_weekly_summary(patient_name, week_number, det_pred)
 
-    # 5️⃣ Re‐read the root summary and, if it now has 4+ weeks, generate a month
+    # if more than 4 weeks change root
     df_root = pd.read_csv(root_summary)
     if len(df_root) >= 4:
         generate_monthly_report(patient_name, root_folder)

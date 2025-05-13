@@ -17,6 +17,9 @@ import threading
 import cv2
 import time
 from tkinter import Toplevel
+from tkinter.ttk import Scrollbar
+
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from real_time import track_eye_activity, import_existing_data_and_generate_report
@@ -842,35 +845,68 @@ class ViewDataPage(BasePage):
         paned = tk.PanedWindow(self.rt_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        # left tree
+        # ading left scrollbar 
         lf = tb.Frame(paned, width=300)
         lf.pack_propagate(False)
         paned.add(lf, stretch="always", minsize=300)
 
         self.rt_tree = Treeview(lf, show="tree")
-        self.rt_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        vsb = Scrollbar(
+            lf,
+            orient="vertical",
+            command=self.rt_tree.yview,
+            style='Vertical.TScrollbar'     
+        )
+        self.rt_tree.configure(yscrollcommand=vsb.set)
+
+        vsb.pack(side=RIGHT, fill=Y, padx=(0,5), pady=5)
+        self.rt_tree.pack(fill=BOTH, expand=True, padx=(5,0), pady=5)
         self.rt_tree.bind("<<TreeviewSelect>>", self._on_rt_select)
 
-        # right pane container
+        # adding right scrollbar
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
 
-        # now create the Text as disabled
         self.rt_text = tk.Text(rf, wrap="none", state="disabled")
-        self.rt_text.pack(fill=X, padx=5, pady=(5,0))
+        text_vsb = Scrollbar(
+            rf,
+            orient="vertical",
+            command=self.rt_text.yview,
+            style='Vertical.TScrollbar'
+        )
+        text_hsb = Scrollbar(
+            rf,
+            orient="horizontal",
+            command=self.rt_text.xview,
+            style='Horizontal.TScrollbar'
+        )
+        self.rt_text.configure(
+            yscrollcommand=text_vsb.set,
+            xscrollcommand=text_hsb.set
+        )
 
+        # grid for scrollbars
+        self.rt_text.grid(row=0, column=0, sticky="nsew", padx=(5,0), pady=(5,0))
+        text_vsb.grid(row=0, column=1, sticky="ns",    padx=(0,5), pady=(5,0))
+        text_hsb.grid(row=1, column=0, sticky="ew",    padx=(5,0), pady=(0,5))
+
+        rf.rowconfigure(0, weight=1)
+        rf.columnconfigure(0, weight=1)
+
+        
         self.rt_graphs = tb.Frame(rf)
-        self.rt_graphs.pack(fill=BOTH, expand=True, padx=5, pady=(5,0))
+        self.rt_graphs.grid(row=2, column=0, columnspan=2,
+                            sticky="nsew", padx=5, pady=(5,0))
 
-        # force sash at 300px
         paned.update_idletasks()
         paned.sash_place(0, 300, 0)
 
         self._populate_rt()
 
 
+
     def _populate_rt(self):
-        # Clear
+        # Clears tab
         for iid in self.rt_tree.get_children():  
             self.rt_tree.delete(iid)
 
@@ -900,7 +936,7 @@ class ViewDataPage(BasePage):
         base = os.path.join("deterministic_model_test", user)
         path = os.path.join(base, fn)
 
-        # 1) make editable to clear/insert
+        
         self.rt_text.config(state='normal')
         self.rt_text.delete("1.0", END)
 
@@ -924,7 +960,7 @@ class ViewDataPage(BasePage):
         # 2) lock it back down
         self.rt_text.config(state='disabled')
 
-        # redraw any graphs
+        
         for w in self.rt_graphs.winfo_children():
             w.destroy()
         rootname, _ = os.path.splitext(fn)
@@ -945,24 +981,53 @@ class ViewDataPage(BasePage):
         paned = tk.PanedWindow(self.imp_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        # left tree
+        # left scrtollbar
         lf = tb.Frame(paned, width=300)
         lf.pack_propagate(False)
         paned.add(lf, stretch="always", minsize=300)
 
         self.imp_tree = Treeview(lf, show="tree")
-        self.imp_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        imp_vsb = Scrollbar(
+            lf,
+            orient="vertical",
+            command=self.imp_tree.yview,
+            style='Vertical.TScrollbar'
+        )
+        self.imp_tree.configure(yscrollcommand=imp_vsb.set)
+
+        imp_vsb.pack(side=RIGHT, fill=Y, padx=(0,5), pady=5)
+        self.imp_tree.pack(fill=BOTH, expand=True, padx=(5,0), pady=5)
         self.imp_tree.bind("<<TreeviewSelect>>", self._on_imp_select)
 
-        # right pane container
+        # right scrollbar
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
 
-        # create the Text as disabled
         self.imp_text = tk.Text(rf, wrap="none", state="disabled")
-        self.imp_text.pack(fill=BOTH, expand=True, padx=5, pady=(5,0))
+        imp_text_vsb = Scrollbar(
+            rf,
+            orient="vertical",
+            command=self.imp_text.yview,
+            style='Vertical.TScrollbar'
+        )
+        imp_text_hsb = Scrollbar(
+            rf,
+            orient="horizontal",
+            command=self.imp_text.xview,
+            style='Horizontal.TScrollbar'
+        )
+        self.imp_text.configure(
+            yscrollcommand=imp_text_vsb.set,
+            xscrollcommand=imp_text_hsb.set
+        )
 
-        # force sash at 300px
+        self.imp_text.grid(row=0, column=0, sticky="nsew", padx=(5,0), pady=(5,0))
+        imp_text_vsb.grid(row=0, column=1, sticky="ns", padx=(0,5), pady=(5,0))
+        imp_text_hsb.grid(row=1, column=0, sticky="ew", padx=(5,0), pady=(0,5))
+
+        rf.rowconfigure(0, weight=1)
+        rf.columnconfigure(0, weight=1)
+
         paned.update_idletasks()
         paned.sash_place(0, 300, 0)
 
@@ -1213,8 +1278,6 @@ class EyeTrackingApp(tb.Window):
 
         # go back to login
         self.show_frame("LoginPage")
-
-
 
 
 if __name__ == "__main__":

@@ -19,14 +19,18 @@ test works for algorithm                                                        
 testing inside UI -  maybe                                                                           DONE
 about section -  fill                                                                                DONE
 hashing -evie - add
-                                                                                                    DONE
-Legal Page - user test request 
+                                                                                                    
+Legal Page - user test request                                                                       DONE
 button colour clarity - user test request
-get rid of typing in csv - user test request
-button on import data page - user test request 
+get rid of typing in csv - user test request                                                         DONE
+button on import data page - user test request                                                       DONE
+add scrollbars for view data page - user test request                                                DONE
+  
 
-user test - evie, armal        
+FOR DEMO:
 gant chart                                                                                           DONE
+user test - evie                                                                                     DONE                           
+user test - armal                                                                                            
 presentation
-update github
+update github                                                                                        DONE
 checks
