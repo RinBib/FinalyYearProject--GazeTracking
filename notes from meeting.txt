@@ -18,10 +18,10 @@ import works for algorithm                                                      
 test works for algorithm                                                                             DONE
 testing inside UI -  maybe                                                                           DONE
 about section -  fill                                                                                DONE
-hashing -evie - add
+hashing -evie - add                                                                                  DONE
                                                                                                     
 Legal Page - user test request                                                                       DONE
-button colour clarity - user test request
+button colour clarity - user test request                                                            DONE
 get rid of typing in csv - user test request                                                         DONE
 button on import data page - user test request                                                       DONE
 add scrollbars for view data page - user test request                                                DONE
