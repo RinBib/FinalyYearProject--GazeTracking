@@ -30,8 +30,6 @@ class LoginPage(tb.Frame):
         super().__init__(parent)
         self.controller = controller
 
-        style = tb.Style()
-
         self.email_var = tk.StringVar()
         self.pw_var = tk.StringVar()
         self.name_var = tk.StringVar()
@@ -829,7 +827,7 @@ class ViewDataPage(BasePage):
         self.controller.imported_folder = None
 
         # Notebook tabs
-        self.notebook = tb.Notebook(self, bootstyle="secondary.TNotebook")
+        self.notebook = tb.Notebook(self, bootstyle="secondary")
         self.notebook.pack(fill=BOTH, expand=True, padx=20, pady=20)
 
         self.rt_tab  = tb.Frame(self.notebook)
@@ -1164,6 +1162,29 @@ class EyeTrackingApp(tb.Window):
             background=[('active', '#0a192f')],     
             bordercolor=[('active','#ffffff')],     
             foreground=[('active','#77e4e5')]      
+        )
+
+        # styling the tabs after user testing
+        style.configure(
+            "secondary.TNotebook.Tab",
+            background   = "#223344",
+            foreground   = "#ccd6f6",
+        )
+
+        # when hovered, tab gets lighter
+        style.map(
+            "secondary.TNotebook.Tab",
+            # 
+            background = [
+                ("active",   "#345473"),  # hover
+                ("selected", "#345473"),  # selected/clicked
+                ("!selected","#223344"),  # unselected
+            ],
+            foreground = [
+                ("active",   "#ffffff"),
+                ("selected", "#ffffff"),
+                ("!selected","#ccd6f6"),
+            ]
         )
 
         self.sidebar_visible = False
