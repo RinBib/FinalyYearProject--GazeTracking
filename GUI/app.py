@@ -7,7 +7,7 @@ import datetime
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from PIL import Image, ImageTk, ImageOps, ImageSequence, ImageDraw
-from tkinter import BOTH, X, TOP, LEFT, RIGHT, END
+from tkinter import BOTH, X, Y, TOP, LEFT, RIGHT, END
 from tkinter.ttk import Treeview
 import tkinter.font as tkfont
 from auth import register_user, verify_user, get_user_name
@@ -866,7 +866,7 @@ class ViewDataPage(BasePage):
         # adding right scrollbar
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
-
+        
         self.rt_text = tk.Text(rf, wrap="none", state="disabled")
         text_vsb = Scrollbar(
             rf,
@@ -893,10 +893,6 @@ class ViewDataPage(BasePage):
         rf.rowconfigure(0, weight=1)
         rf.columnconfigure(0, weight=1)
 
-        
-        self.rt_graphs = tb.Frame(rf)
-        self.rt_graphs.grid(row=2, column=0, columnspan=2,
-                            sticky="nsew", padx=5, pady=(5,0))
 
         paned.update_idletasks()
         paned.sash_place(0, 300, 0)
@@ -959,22 +955,6 @@ class ViewDataPage(BasePage):
 
         # 2) lock it back down
         self.rt_text.config(state='disabled')
-
-        
-        for w in self.rt_graphs.winfo_children():
-            w.destroy()
-        rootname, _ = os.path.splitext(fn)
-        imgs = []
-        for imgfile in sorted(os.listdir(base)):
-            if imgfile.startswith(rootname) and imgfile.lower().endswith(".png"):
-                im = Image.open(os.path.join(base, imgfile)).resize((180,180), Image.LANCZOS)
-                imgs.append(ImageTk.PhotoImage(im))
-        for i, photo in enumerate(imgs):
-            lbl = tk.Label(self.rt_graphs, image=photo)
-            lbl.image = photo
-            lbl.grid(row=i//3, column=i%3, padx=5, pady=5)
-
-
 
 
     def _build_imp_pane(self):
@@ -1101,7 +1081,7 @@ class ViewDataPage(BasePage):
             self.imp_text.insert(END, df.head(50).to_string(index=False))
 
         elif ext in (".png", ".jpg", ".jpeg"):
-            img   = Image.open(path).resize((300, 300), Image.LANCZOS)
+            img   = Image.open(path).resize((400, 400), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             self.imp_text.image = photo
             self.imp_text.image_create("1.0", image=photo)
