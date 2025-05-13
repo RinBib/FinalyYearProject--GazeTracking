@@ -572,6 +572,16 @@ class ImportPage(BasePage):
                             font=("Poppins", 12),
                             foreground="lightgreen")
         self.msg.pack(pady=(20,0))
+        
+        
+        # Shortcut to Imported-Data view
+        tb.Button(
+            self,
+            text="View Imported Data",
+            bootstyle="info-outline",
+            width=20,
+            command=self._goto_imported_tab
+        ).pack(pady=(10,0))
 
     def _on_browse(self):
         
@@ -627,7 +637,11 @@ class ImportPage(BasePage):
         view_page = self.controller.frames["ViewDataPage"]
         view_page.show_imported_tab()
 
-
+    def _goto_imported_tab(self):
+        
+        view = self.controller.frames["ViewDataPage"]
+        view.show_imported_tab()                   
+        self.controller.show_frame("ViewDataPage") 
         
         
 
