@@ -18,9 +18,15 @@ import works for algorithm                                                      
 test works for algorithm                                                                             DONE
 testing inside UI -  maybe                                                                           DONE
 about section -  fill                                                                                DONE
-hashing -evie - add                                                                                  DONE
-user test - evie
-gant chart
+hashing -evie - add
+                                                                                                    DONE
+Legal Page - user test request 
+button colour clarity - user test request
+get rid of typing in csv - user test request
+button on import data page - user test request 
+
+user test - evie, armal        
+gant chart                                                                                           DONE
 presentation
 update github
 checks

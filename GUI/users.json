@@ -2,5 +2,17 @@
   "dog": {
     "password": "$argon2id$v=19$m=65536,t=3,p=4$Q1qOongyCHT/G4tU5GMnKg$McmeFq6B9hW2EyP/lJEdpREYQRcEGpVZACTC7ksAHcs",
     "name": "dog"
+  },
+  "evie.paige.anderson@gmail.com": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$hlYnCF9yzA6fbrQJIC2h8A$Angz+bFne8C4gW1TNwrrr/giHInDTBPwfmzZIG4TTLA",
+    "name": "Evie"
+  },
+  "test": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$iXSVBUpQV/9pX9yxdSOrlA$kGzD/Yt/QzF8r5zcj6ejNmpvS8h5d0RtTeIDU/7C6bM",
+    "name": "test"
+  },
+  "evietest": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$0pDhj6zOwwTv1aDvtRYCpQ$73mKWk9qpNPn5lLnjRZSuTuSnI4Jr8CF6YnWVqD0r/c",
+    "name": "evietest"
   }
 }

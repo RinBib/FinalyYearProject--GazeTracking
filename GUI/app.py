@@ -396,18 +396,7 @@ class InstructionPage(BasePage):
 
         test_page.begin_countdown(5)
         
-        
-        def worker():
-            # 1. live‐tracking, pushing frames to test_page.update_frame
-            track_eye_activity(patient_name, tracking_duration=10, frame_callback=test_page.update_frame)
-
-            # 2. once done, generate your CSV‐import/weekly report
-            import_existing_data_and_generate_report(patient_name, user_folder)
-
-            # 3. then switch to the “ViewDataPage” on the main thread
-            self.controller.after(0, lambda: self._finish_test(patient_name))
-
-        threading.Thread(target=worker, daemon=True).start()
+    
 
     def _finish_test(self):
         patient_name = (
@@ -783,9 +772,39 @@ class AboutPage(BasePage):
           .pack(padx=40, pady=20)
      
      
+     
+class LegalPage(BasePage):
+    def __init__(self, parent, controller):
+        super().__init__(parent, controller)
 
+        tb.Label(self,
+                 text="Where Your Data Goes",
+                 font=("Poppins", 24, "bold"),
+                 foreground="#ccd6f6")\
+          .pack(pady=(40, 10))
 
+        legal_text = (
+            "All gaze‐tracking data you generate is stored locally on your machine\n"
+            "in the folder:\n\n"
+            "    deterministic_model_test/<your-email-or-name>/\n\n"
+            "• CSV logs of every session\n"
+            "• Weekly and monthly summary charts (PNG)\n"
+            "• Optional PDF reports\n\n"
+            "We do NOT transmit any data off-device without your explicit consent.\n"
+            "You remain in full control of your files at all times."
+        )
 
+        tb.Label(self,
+                 text=legal_text,
+                 font=("Poppins", 12),
+                 foreground="#ffffff",
+                 background="#0a192f",
+                 justify="left",
+                 wraplength=750)\
+          .pack(padx=40, pady=20)
+     
+     
+     
 
 class ViewDataPage(BasePage):
     def __init__(self, parent, controller):
@@ -809,7 +828,7 @@ class ViewDataPage(BasePage):
         paned = tk.PanedWindow(self.rt_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        
+        # left tree
         lf = tb.Frame(paned, width=300)
         lf.pack_propagate(False)
         paned.add(lf, stretch="always", minsize=300)
@@ -817,14 +836,15 @@ class ViewDataPage(BasePage):
         self.rt_tree = Treeview(lf, show="tree")
         self.rt_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
         self.rt_tree.bind("<<TreeviewSelect>>", self._on_rt_select)
-        
 
-        
+        # right pane container
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
 
-        self.rt_text   = tk.Text(rf, wrap="none")
+        # now create the Text as disabled
+        self.rt_text = tk.Text(rf, wrap="none", state="disabled")
         self.rt_text.pack(fill=X, padx=5, pady=(5,0))
+
         self.rt_graphs = tb.Frame(rf)
         self.rt_graphs.pack(fill=BOTH, expand=True, padx=5, pady=(5,0))
 
@@ -833,6 +853,7 @@ class ViewDataPage(BasePage):
         paned.sash_place(0, 300, 0)
 
         self._populate_rt()
+
 
     def _populate_rt(self):
         # Clear
@@ -865,7 +886,8 @@ class ViewDataPage(BasePage):
         base = os.path.join("deterministic_model_test", user)
         path = os.path.join(base, fn)
 
-        # clear
+        # 1) make editable to clear/insert
+        self.rt_text.config(state='normal')
         self.rt_text.delete("1.0", END)
 
         ext = os.path.splitext(fn)[1].lower()
@@ -874,21 +896,21 @@ class ViewDataPage(BasePage):
             self.rt_text.insert(END, df.head(20).to_string(index=False))
 
         elif ext in (".png", ".jpg", ".jpeg"):
-            # display image inline
             img = Image.open(path).resize((400, 400), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
-            # insert into text widget
             self.rt_text.image_create("1.0", image=photo)
             self.rt_text.image = photo
 
         elif ext == ".pdf":
-            # just show the path (or open externally)
             self.rt_text.insert(END, f"PDF report saved at:\n{path}")
 
         else:
             self.rt_text.insert(END, f"Cannot preview this file type:\n{fn}")
 
-        # now re-draw any graphs that match the *csv* you clicked on:
+        # 2) lock it back down
+        self.rt_text.config(state='disabled')
+
+        # redraw any graphs
         for w in self.rt_graphs.winfo_children():
             w.destroy()
         rootname, _ = os.path.splitext(fn)
@@ -897,10 +919,11 @@ class ViewDataPage(BasePage):
             if imgfile.startswith(rootname) and imgfile.lower().endswith(".png"):
                 im = Image.open(os.path.join(base, imgfile)).resize((180,180), Image.LANCZOS)
                 imgs.append(ImageTk.PhotoImage(im))
-        for i,photo in enumerate(imgs):
+        for i, photo in enumerate(imgs):
             lbl = tk.Label(self.rt_graphs, image=photo)
             lbl.image = photo
             lbl.grid(row=i//3, column=i%3, padx=5, pady=5)
+
 
 
 
@@ -908,7 +931,7 @@ class ViewDataPage(BasePage):
         paned = tk.PanedWindow(self.imp_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
 
-        
+        # left tree
         lf = tb.Frame(paned, width=300)
         lf.pack_propagate(False)
         paned.add(lf, stretch="always", minsize=300)
@@ -917,15 +940,15 @@ class ViewDataPage(BasePage):
         self.imp_tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
         self.imp_tree.bind("<<TreeviewSelect>>", self._on_imp_select)
 
-        
+        # right pane container
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
-        
 
-
-        self.imp_text = tk.Text(rf, wrap="none")
+        # create the Text as disabled
+        self.imp_text = tk.Text(rf, wrap="none", state="disabled")
         self.imp_text.pack(fill=BOTH, expand=True, padx=5, pady=(5,0))
 
+        # force sash at 300px
         paned.update_idletasks()
         paned.sash_place(0, 300, 0)
 
@@ -960,15 +983,18 @@ class ViewDataPage(BasePage):
         item   = sel[0]
         parent = self.imp_tree.parent(item)
 
+        # make widget editable
+        self.imp_text.config(state='normal')
+        self.imp_text.delete("1.0", END)
+
         # if they clicked the session name itself, show its latest summary
         if parent == "":
             session     = self.imp_tree.item(item, "text")
             session_dir = os.path.join(self.controller.user_data_folder, "imported", session)
             summary_csv = os.path.join(session_dir, "weekly_summary.csv")
 
-            self.imp_text.delete("1.0", END)
             if os.path.exists(summary_csv):
-                df = pd.read_csv(summary_csv)
+                df   = pd.read_csv(summary_csv)
                 last = df.iloc[-1]
                 self.imp_text.insert(END,
                     f"Session: {session}\n\n"
@@ -980,6 +1006,9 @@ class ViewDataPage(BasePage):
                     f"Session: {session}\n\n"
                     "No weekly_summary.csv found."
                 )
+
+            # lock and return early
+            self.imp_text.config(state='disabled')
             return
 
         # otherwise they clicked a file under a session
@@ -988,16 +1017,13 @@ class ViewDataPage(BasePage):
         path    = os.path.join(self.controller.user_data_folder, "imported", session, fn)
         ext     = os.path.splitext(fn)[1].lower()
 
-        self.imp_text.delete("1.0", END)
-
         if ext == ".csv":
             df = pd.read_csv(path)
             self.imp_text.insert(END, df.head(50).to_string(index=False))
 
         elif ext in (".png", ".jpg", ".jpeg"):
-            img = Image.open(path).resize((300, 300), Image.LANCZOS)
+            img   = Image.open(path).resize((300, 300), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
-            # clear previous image refs
             self.imp_text.image = photo
             self.imp_text.image_create("1.0", image=photo)
 
@@ -1006,6 +1032,10 @@ class ViewDataPage(BasePage):
 
         else:
             self.imp_text.insert(END, f"Cannot preview this file type:\n{fn}")
+
+        # lock it back down
+        self.imp_text.config(state='disabled')
+
 
 
     def show_imported_tab(self):
@@ -1084,7 +1114,7 @@ class EyeTrackingApp(tb.Window):
         self.main_frame.pack(fill=BOTH, expand=True)
 
         self.frames = {}
-        for F in (LoginPage, HomePage, InstructionPage, TestPage, ViewDataPage, ImportPage, SettingsPage, AboutPage):
+        for F in (LoginPage, HomePage, InstructionPage, TestPage, ViewDataPage, ImportPage, SettingsPage, AboutPage, LegalPage):
             frame = F(parent=self.main_frame, controller=self)
             self.frames[F.__name__] = frame
             frame.place(relwidth=1, relheight=1)
@@ -1128,6 +1158,7 @@ class EyeTrackingApp(tb.Window):
                 ("View Data Files", lambda: self.show_frame("ViewDataPage")),
                 ("Settings", lambda: self.show_frame("SettingsPage")),
                 ("About", lambda: self.show_frame("AboutPage")),
+                ("Legal", lambda: self.show_frame("LegalPage")),
                 ("Log Out",           self.logout),
                 ("Exit",              self.quit)
             ]:
