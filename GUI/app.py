@@ -64,7 +64,7 @@ class EyeTrackingApp(tb.Window):
         tkfont.nametofont("TkTextFont").configure(family="Poppins", size=20)
         tkfont.nametofont("TkHeadingFont").configure(family="Poppins", size=20)
 
-        # stlyinh
+        # stlying
         style = tb.Style()
 
         # frames, labels, button themes

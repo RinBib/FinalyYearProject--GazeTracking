@@ -34,14 +34,15 @@ class SettingsPage(BasePage):
         self.controller.user_name_var.set(self.controller.current_user_name)
         self.controller.user_email_var.set(self.controller.current_user_email)
         
+        # Creating notebook
         nb = tb.Notebook(self, bootstyle="secondary.TNotebook")
         nb.pack(fill=BOTH, expand=True, padx=100, pady=100)
 
-        
+        # prfile tab
         profile_tab = tb.Frame(nb)
         nb.add(profile_tab, text="Profile")
         
-         
+        # label for profile
         tb.Label(profile_tab,
                  text="Name:",
                  font=("Poppins", 12),
@@ -55,25 +56,25 @@ class SettingsPage(BasePage):
             .grid(row=0, column=1, padx=10, pady=(10,5))
             
         
-        
+        # show email - label
         tb.Label(profile_tab,
                  text="Email:",
                  font=("Poppins", 12),
                  foreground="#ccd6f6")\
           .grid(row=1, column=0, sticky="w", padx=10, pady=5)
               
-
+        
         tb.Label(profile_tab,
                 textvariable=controller.user_email_var,
                 font=("Poppins",12,"bold"),
                 foreground="#ffffff")\
             .grid(row=1, column=1, padx=10, pady=5)
 
-
-        
+        # password label
         tb.Label(profile_tab, text="Password:", font=("Poppins",12), foreground="#ccd6f6")\
           .grid(row=2, column=0, sticky="w", padx=10, pady=5)
 
+        # password in entry box already
         pwd_entry = tb.Entry(profile_tab,
                              textvariable=controller.user_password_var,
                              font=("Poppins",12),
@@ -81,6 +82,7 @@ class SettingsPage(BasePage):
                              state="readonly")
         pwd_entry.grid(row=2, column=1, sticky="w", padx=10, pady=5)
 
+        # add toggle to show/ hide password
         def toggle_password():
             if pwd_entry.cget("show") == "":
                 pwd_entry.config(show="*")
@@ -89,6 +91,7 @@ class SettingsPage(BasePage):
                 pwd_entry.config(show="")
                 btn_toggle.config(text="Hide")
 
+        # button to show password
         btn_toggle = tb.Button(profile_tab,
                                text="Show",
                                width=5,
@@ -124,7 +127,7 @@ class SettingsPage(BasePage):
           .pack(expand=True)
 
 
-        
+        # placeholder button to save potential settings
         btn = tb.Button(self,
                         text="Save Settings",
                         bootstyle="dark",

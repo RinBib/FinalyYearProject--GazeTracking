@@ -30,23 +30,23 @@ from GUI.auth import register_user, verify_user, get_user_name
 class LiveTestPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
-
+        # Label text
         tb.Label(self, text="Running test...", font=("Poppins", 18), foreground="#ccd6f6")\
           .pack(pady=10)
 
         # Canvas to draw video frames
         self.canvas = tk.Canvas(self, width=640, height=480)
         self.canvas.pack()
-        self.photo_image = None  # keep a reference
+        self.photo_image = None  
 
     def on_show(self):
         # Called every time this page is raised
         user = self.controller.current_user_name or self.controller.current_user_email
-        # spawn the tracking thread so we don't block the UI
+        # threading of window
         threading.Thread(target=self._run_test, args=(user,), daemon=True).start()
 
     def _run_test(self, patient_name):
-        # run your tracking loop, but pass in a callback to get each frame
+        # Run tracking test
         def _frame_callback(cv_frame):
             # convert BGR to PIL image
             rgb = cv2.cvtColor(cv_frame, cv2.COLOR_BGR2RGB)
@@ -56,14 +56,14 @@ class LiveTestPage(BasePage):
             # update canvas on the main thread
             self.canvas.after(0, lambda: self.canvas.create_image(0,0,anchor="nw",image=self.photo_image))
 
-        # *** you'll need to modify track_eye_activity to accept a callback ***
+        # calling track_eye_activity
         track_eye_activity(patient_name,
                            tracking_duration=10,
                            frame_callback=_frame_callback)
 
-        # when done, import & generate report
+        # after complete, geenrate report (if possible)
         session_folder = os.path.join("deterministic_model_test", patient_name)
         import_existing_data_and_generate_report(patient_name, session_folder)
 
-        # finally switch to the view data page
+        # navigate to view data page - real-time tab
         self.after(0, lambda: self.controller.show_frame("ViewDataPage"))

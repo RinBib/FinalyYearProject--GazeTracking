@@ -21,7 +21,6 @@ from tkinter import Toplevel
 from tkinter.ttk import Scrollbar
 
 
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from real_time import track_eye_activity, import_existing_data_and_generate_report
 from GUI.auth import register_user, verify_user, get_user_name
@@ -45,6 +44,7 @@ class ViewDataPage(BasePage):
         self._build_rt_pane()
         self._build_imp_pane()
 
+    # defining real time pane
     def _build_rt_pane(self):
         paned = tk.PanedWindow(self.rt_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
@@ -61,16 +61,18 @@ class ViewDataPage(BasePage):
             command=self.rt_tree.yview,
             style='Vertical.TScrollbar'     
         )
+        # tree drop dopwn for file
         self.rt_tree.configure(yscrollcommand=vsb.set)
 
         vsb.pack(side=RIGHT, fill=Y, padx=(0,5), pady=5)
         self.rt_tree.pack(fill=BOTH, expand=True, padx=(5,0), pady=5)
         self.rt_tree.bind("<<TreeviewSelect>>", self._on_rt_select)
 
-        # adding right scrollbar
+        # adding right scrollbar - user testing feature
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
         
+        # vertical scrollbar
         self.rt_text = tk.Text(rf, wrap="none", state="disabled")
         text_vsb = Scrollbar(
             rf,
@@ -78,6 +80,7 @@ class ViewDataPage(BasePage):
             command=self.rt_text.yview,
             style='Vertical.TScrollbar'
         )
+        # horizontal scrollbar
         text_hsb = Scrollbar(
             rf,
             orient="horizontal",
@@ -89,14 +92,13 @@ class ViewDataPage(BasePage):
             xscrollcommand=text_hsb.set
         )
 
-        # grid for scrollbars
+        # postiioning for scrollbars
         self.rt_text.grid(row=0, column=0, sticky="nsew", padx=(5,0), pady=(5,0))
         text_vsb.grid(row=0, column=1, sticky="ns",    padx=(0,5), pady=(5,0))
         text_hsb.grid(row=1, column=0, sticky="ew",    padx=(5,0), pady=(0,5))
 
         rf.rowconfigure(0, weight=1)
         rf.columnconfigure(0, weight=1)
-
 
         paned.update_idletasks()
         paned.sash_place(0, 300, 0)
@@ -110,7 +112,7 @@ class ViewDataPage(BasePage):
         for iid in self.rt_tree.get_children():  
             self.rt_tree.delete(iid)
 
-        # nothing until user logs in
+        # empty until user logs in
         user = self.controller.current_user_name or self.controller.current_user_email
         if not user:  
             return
@@ -124,6 +126,7 @@ class ViewDataPage(BasePage):
 
 
     def _on_rt_select(self, _evt):
+        # if tree is selcted, drop down
         sel = self.rt_tree.selection()
         if not sel:
             return
@@ -136,7 +139,6 @@ class ViewDataPage(BasePage):
         base = os.path.join("deterministic_model_test", user)
         path = os.path.join(base, fn)
 
-        
         self.rt_text.config(state='normal')
         self.rt_text.delete("1.0", END)
 
@@ -145,22 +147,23 @@ class ViewDataPage(BasePage):
             df = pd.read_csv(path)
             self.rt_text.insert(END, df.head(20).to_string(index=False))
 
+        # view png graphs, when selected.
         elif ext in (".png", ".jpg", ".jpeg"):
+            # resize image
             img = Image.open(path).resize((400, 400), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             self.rt_text.image_create("1.0", image=photo)
             self.rt_text.image = photo
-
+        # message when pdf saved
         elif ext == ".pdf":
             self.rt_text.insert(END, f"PDF report saved at:\n{path}")
-
+        # error message when unformatted file type
         else:
             self.rt_text.insert(END, f"Cannot preview this file type:\n{fn}")
 
-        # 2) lock it back down
         self.rt_text.config(state='disabled')
 
-
+    # build imported tab
     def _build_imp_pane(self):
         paned = tk.PanedWindow(self.imp_tab, orient=tk.HORIZONTAL)
         paned.pack(fill=BOTH, expand=True)
@@ -178,7 +181,8 @@ class ViewDataPage(BasePage):
             style='Vertical.TScrollbar'
         )
         self.imp_tree.configure(yscrollcommand=imp_vsb.set)
-
+        
+        # treeview drop dpown folder
         imp_vsb.pack(side=RIGHT, fill=Y, padx=(0,5), pady=5)
         self.imp_tree.pack(fill=BOTH, expand=True, padx=(5,0), pady=5)
         self.imp_tree.bind("<<TreeviewSelect>>", self._on_imp_select)
@@ -186,14 +190,17 @@ class ViewDataPage(BasePage):
         # right scrollbar
         rf = tb.Frame(paned)
         paned.add(rf, stretch="always")
-
         self.imp_text = tk.Text(rf, wrap="none", state="disabled")
+        
+        # vertical scroll bar
         imp_text_vsb = Scrollbar(
             rf,
             orient="vertical",
             command=self.imp_text.yview,
             style='Vertical.TScrollbar'
         )
+        
+        # horizontal scrollbar
         imp_text_hsb = Scrollbar(
             rf,
             orient="horizontal",
@@ -205,6 +212,7 @@ class ViewDataPage(BasePage):
             xscrollcommand=imp_text_hsb.set
         )
 
+        # position scrollbar
         self.imp_text.grid(row=0, column=0, sticky="nsew", padx=(5,0), pady=(5,0))
         imp_text_vsb.grid(row=0, column=1, sticky="ns", padx=(0,5), pady=(5,0))
         imp_text_hsb.grid(row=1, column=0, sticky="ew", padx=(5,0), pady=(0,5))
@@ -284,12 +292,14 @@ class ViewDataPage(BasePage):
             df = pd.read_csv(path)
             self.imp_text.insert(END, df.head(50).to_string(index=False))
 
+        # image imprted resized and formatted
         elif ext in (".png", ".jpg", ".jpeg"):
             img   = Image.open(path).resize((400, 400), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             self.imp_text.image = photo
             self.imp_text.image_create("1.0", image=photo)
-
+            
+        # pdf saved
         elif ext == ".pdf":
             self.imp_text.insert(END, f"PDF report saved at:\n{path}")
 

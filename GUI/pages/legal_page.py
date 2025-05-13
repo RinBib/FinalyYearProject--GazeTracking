@@ -30,13 +30,13 @@ from GUI.auth import register_user, verify_user, get_user_name
 class LegalPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
-
+        # Labe for page
         tb.Label(self,
                  text="Where Your Data Goes",
                  font=("Poppins", 24, "bold"),
                  foreground="#ccd6f6")\
           .pack(pady=(40, 10))
-
+        # legal info text
         legal_text = (
             "All gaze‐tracking data you generate is stored locally on your machine\n"
             "in the folder:\n\n"
@@ -47,7 +47,7 @@ class LegalPage(BasePage):
             "We do NOT transmit any data off-device without your explicit consent.\n"
             "You remain in full control of your files at all times."
         )
-
+        # formatting actual text
         tb.Label(self,
                  text=legal_text,
                  font=("Poppins", 12),

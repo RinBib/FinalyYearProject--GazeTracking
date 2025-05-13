@@ -39,7 +39,7 @@ class HomePage(BasePage):
                      .resize((300,300), Image.LANCZOS)
             self.gif_frames.append(ImageTk.PhotoImage(f))
 
-        # GIF label 
+        # creating label for GIF
         self.gif_label = tb.Label(self)
         self.gif_label.pack(pady=(30, 10))
         self.animate_gif(0)
@@ -50,7 +50,7 @@ class HomePage(BasePage):
                  font=("Poppins", 24),
                  foreground="#ccd6f6").pack(pady=(0, 20))
 
-        # Start / Exit
+        # Start green button
         tb.Button(self,
                   text="Start",
                   command=lambda: controller.show_frame("InstructionPage"),
@@ -58,7 +58,7 @@ class HomePage(BasePage):
                   takefocus=False,
                   width=20,
                   padding=30).place(relx=0.1, rely=0.85, anchor='w')
-        
+        # exit red button
         tb.Button(self,
                   text="Exit",
                   command=controller.quit,
@@ -66,7 +66,8 @@ class HomePage(BasePage):
                   takefocus=False,
                   width=20,
                   padding=30).place(relx=0.9, rely=0.85, anchor='e')
-
+        
+    # adding animation to the GIF
     def animate_gif(self, idx):
         self.gif_label.config(image=self.gif_frames[idx])
         self.after(100, self.animate_gif, (idx+1) % len(self.gif_frames))

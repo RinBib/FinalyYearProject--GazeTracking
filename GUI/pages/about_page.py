@@ -1,3 +1,4 @@
+# lIbrary imports
 from .base_page import BasePage
 import os
 import sys
@@ -21,7 +22,7 @@ from tkinter import Toplevel
 from tkinter.ttk import Scrollbar
 
 
-
+# importin real-time and auth
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from real_time import track_eye_activity, import_existing_data_and_generate_report
 from GUI.auth import register_user, verify_user, get_user_name
@@ -52,6 +53,7 @@ class AboutPage(BasePage):
             "which offers caregivers, parents and clinicians insights to a users long-term cognitive health\n\n"
             "© 2025 All rights reserved."
         )
+        # craeting label for text
         tb.Label(self,
                  text=about_text,
                  font=("Poppins", 12),

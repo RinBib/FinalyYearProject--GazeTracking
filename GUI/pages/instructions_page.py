@@ -113,9 +113,9 @@ class InstructionPage(BasePage):
         test_page.begin_countdown(5)
         
     
-
+    # after test is finished, direct to view datapage
     def _finish_test(self):
-        patient_name = (
+        self.patient_name = (
         self.controller.current_user_name
         or self.controller.current_user_email
         or "UnknownUser"

@@ -31,7 +31,7 @@ class ImportPage(BasePage):
     def __init__(self, parent, controller):
         super().__init__(parent, controller)
 
-        # Title
+        # title for page
         tb.Label(self,
                  text="Import Existing Data",
                  font=("Poppins", 16),
@@ -59,7 +59,7 @@ class ImportPage(BasePage):
         self.msg.pack(pady=(20,0))
         
         
-        # Shortcut to Imported-Data view
+        # Shortcut to Imported-Data view - user test result
         tb.Button(
             self,
             text="View Imported Data",
@@ -68,19 +68,20 @@ class ImportPage(BasePage):
             command=self._goto_imported_tab
         ).pack(pady=(10,0))
 
+    # Browse button fucntion
     def _on_browse(self):
         
         folder = tk.filedialog.askdirectory(title="Select folder with CSV files")
         if not folder:
             return
-
+        # defining user
         user = (
             self.controller.current_user_name
             or self.controller.current_user_email
             or "UnknownUser"
         )
 
-        
+        # format of supported csv
         csvs = [f for f in os.listdir(folder) if f.lower().endswith(".csv")]
         if not csvs:
             tk.messagebox.showwarning(
@@ -93,10 +94,11 @@ class ImportPage(BasePage):
             print("User data folder not set!")
             return
         
+        # import message
         import_base = os.path.join(self.controller.user_data_folder, "imported")
         os.makedirs(import_base, exist_ok=True)
 
-        
+        # creating file where name is user name numbered
         existing = [
             d for d in os.listdir(import_base)
             if os.path.isdir(os.path.join(import_base, d))
@@ -105,23 +107,24 @@ class ImportPage(BasePage):
         session_folder = os.path.join(import_base, session_name)
         os.makedirs(session_folder)
 
-        
+        # Naming the files
         for fname in csvs:
             shutil.copy(
                 os.path.join(folder, fname),
                 os.path.join(session_folder, fname)
             )
 
-        
+        # Importing function from real-time
         import_existing_data_and_generate_report(user, session_folder)
 
-        
+        # message given to user
         self.msg.config(text=f"Imported {len(csvs)} file(s) as session '{session_name}'")
 
         
         view_page = self.controller.frames["ViewDataPage"]
         view_page.show_imported_tab()
 
+    # navigates to view data page
     def _goto_imported_tab(self):
         
         view = self.controller.frames["ViewDataPage"]
