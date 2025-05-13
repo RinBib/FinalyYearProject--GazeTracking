@@ -20,13 +20,9 @@ import shutil
 import joblib
 
 
- # Load the Random Forest model
+# Load the Random Forest model
 cognitive_model = joblib.load('logistic_model.joblib') 
 scaler = joblib.load('scaler.pkl')  
-
-
-
-
 
 # Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -42,28 +38,29 @@ FRAME_WIDTH, FRAME_HEIGHT = 640, 480
 # (x1,y1) (x2,y2)
 SAFE_ZONE = (200, 100, 440, 380) 
 
-SACCADE_VELOCITY_THRESHOLD = 3.0# deg/sec (Adjust this based on research)
-SACCADE_DURATION_THRESHOLD = 50  # ms (Average duration of a saccade)
-SACCADE_MIN_DURATION = 180  # Ensure only real saccades are counted
+# deg/sec (Adjust this based on research)
+SACCADE_VELOCITY_THRESHOLD = 3.0 
+# ms (Average duration of a saccade)
+SACCADE_DURATION_THRESHOLD = 50  
+# Ensure only real saccades are counted
+SACCADE_MIN_DURATION = 180  
 
 # Constants for real-world conversion
 DPI = 96  
 SCREEN_DISTANCE_MM = 600 
-MAX_DISTANCE_MM = 800  #  Maximum distance before pausing tracking
-# Assume a reference face width at 60 cm distance
-KNOWN_FACE_WIDTH_MM = 150  # Approximate human face width in mm
-FOCAL_LENGTH = 500  # Estimated camera focal length 
-
+#  Maximum distance before pausing tracking
+MAX_DISTANCE_MM = 800  
+# Assume a reference face width at 60 cm distance - gpt
+KNOWN_FACE_WIDTH_MM = 150 
+# Estimated camera focal length 
+FOCAL_LENGTH = 500  
+# convert pixel to MM
 PIXEL_TO_MM = 25.4 / DPI  
  
 def estimate_distance(face_width_px):
-    """
-    Estimates the user's distance from the screen using face size.
-    - Larger faces mean closer distance.
-    - Smaller faces mean further distance.
-    """
     if face_width_px == 0:
-        return SCREEN_DISTANCE_MM  # Default if no face is detected
+        # Default if no face is detected
+        return SCREEN_DISTANCE_MM  
     return (KNOWN_FACE_WIDTH_MM * FOCAL_LENGTH) / face_width_px
  
  
@@ -87,15 +84,15 @@ def is_head_centered(face):
     x, y, w, h = face.left(), face.top(), face.width(), face.height()
     x_center, y_center = x + w // 2, y + h // 2
 
-    # Define oval center and axes (adjust as needed)
+    # Define oval center and axes 
     oval_center_x, oval_center_y = 320, 240  # Center of screen
     oval_axis_x, oval_axis_y = 160, 180  # Horizontal and vertical radii
 
     # Equation of an ellipse: ((x-h)/a)^2 + ((y-k)/b)^2 <= 1
     normalized_x = ((x_center - oval_center_x) ** 2) / (oval_axis_x ** 2)
     normalized_y = ((y_center - oval_center_y) ** 2) / (oval_axis_y ** 2)
-
-    return (normalized_x + normalized_y) <= 1  # Returns True if inside the oval
+    # Returns True if inside the oval
+    return (normalized_x + normalized_y) <= 1  
 
 
 def pupils_located():
@@ -117,38 +114,19 @@ def pupils_located():
     return False
 
 
-
-
-
-#def pupils_located():
-    #try:
-        #if gaze.eye_left and gaze.eye_right:
-           # int(gaze.eye_left.pupil.x)
-          #  int(gaze.eye_left.pupil.y)
-          #  int(gaze.eye_right.pupil.x)
-         #   int(gaze.eye_right.pupil.y)
-       #     return True
-  #  except Exception as e:
- #       # Debugging message
-#        print(f"DEBUG Pupil detection failed: {e}")  
- #   return False
-
-
-
-
 # Calculate speed
 def calculate_speed(prev_point, curr_point, prev_time, curr_time):
     
     distance_px = np.sqrt((curr_point[0] - prev_point[0])**2 + (curr_point[1] - prev_point[1])**2)
     #time_diff = curr_time - prev_time
-    time_diff = max((curr_time - prev_time) / 1000, 0.001)  #  Prevents division by zero
-
-
+    time_diff = max((curr_time - prev_time) / 1000, 0.001)  
+    # Avoid division by zero
     if time_diff <= 0:
-        return 0, 0, 0, time_diff # Avoid division by zero
+        return 0, 0, 0, time_diff 
 
     # Convert pixels to mm
-    distance_mm = distance_px * PIXEL_TO_MM * 2  #  Scaling factor to better match real eye movements
+    # Scaling matches real eye movements
+    distance_mm = distance_px * PIXEL_TO_MM * 2  
 
     speed_mm_sec = distance_mm / time_diff
 
@@ -160,23 +138,23 @@ def calculate_speed(prev_point, curr_point, prev_time, curr_time):
 
 
 def get_next_filename(patient_name):
-    data_folder = f"deterministic_model_test/{patient_name}"
-    os.makedirs(data_folder, exist_ok=True)  # Ensure folder exists
+    data_folder = f"deterministic_model_test/{patient_name}" 
+    # Ensure folder exists
+    os.makedirs(data_folder, exist_ok=True) 
 
     # Get all CSVs for this patient
     existing_csvs = [f for f in os.listdir(data_folder) if f.endswith(".csv")]
-
-    total_days = len(existing_csvs)  # How many total days recorded
-
-    week_number = (total_days // 7) + 1  # Week number (every 7 days is a new week)
-    day_number = (total_days % 7) + 1     # Day number inside the week (1-7)
+    # How many total days recorded
+    total_days = len(existing_csvs)  
+    # Week number (every 7 days is a new week)
+    week_number = (total_days // 7) + 1 
+    # Day number inside the week (1-7)
+    day_number = (total_days % 7) + 1     
 
     #  Create filename using week and day
     filename = f"{patient_name}_w{week_number}_d{day_number}.csv"
 
     return os.path.join(data_folder, filename)
-
-
 
 
 
@@ -201,24 +179,35 @@ def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
 
     prev_x, prev_y, prev_timestamp = None, None, None
     start_time = time.time()
-    paused_time = 0  # Total paused time
-    last_pause_start = None  # When pause started
+    # Total paused time
+    paused_time = 0  
+    # When pause started
+    last_pause_start = None  
     
     fixation_detector = FixationDetector()
-    blink_count = 0  #  Track Blink Count
-    eyes_closed = False  #  Track Eye Closed State
-    blink_start_time = None  #  Track When Blink Starts
-    blink_durations = []  #
-
-    saccade_count = 0  #  Track Total Saccades
-    saccade_durations = []  #  Store Saccade Durations
-    saccade_start_time = None  #  Track When Saccade Starts
-    saccade_detected = False  #  Default State
+    #  Track Blink Count
+    blink_count = 0 
+    #  Track Eye Closed State
+    eyes_closed = False 
+    #  Track When Blink Starts
+    blink_start_time = None  
+    blink_durations = [] 
+     
+    #  Track Total Saccades
+    saccade_count = 0 
+    #  Store Saccade Durations
+    saccade_durations = []  
+    #  Track When Saccade Starts
+    saccade_start_time = None 
+    #  Default State
+    saccade_detected = False  
 
     # Moving shape properties
-    shape_x, shape_y = 320, 240  # Start in center
+    # Start in center
+    shape_x, shape_y = 320, 240  
     shape_radius = 20
-    SCREEN_DISTANCE_MM = 600  #  Default distance if no face is detected at the start
+    #  Default distance if no face is detected at the start
+    SCREEN_DISTANCE_MM = 600  
 
 
     while True:
@@ -233,95 +222,109 @@ def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_detector(gray)
         if faces:
-            
-            for face in faces:  #  Loop through detected faces
-                face_width_px = face.right() - face.left()  #  Get face width in pixels
-                SCREEN_DISTANCE_MM = estimate_distance(face_width_px)  # Update distance dynamically
+             #  Loop through detected faces
+            for face in faces: 
+                #  Get face width in pixels
+                face_width_px = face.right() - face.left()
+                # Update distance dynamically
+                SCREEN_DISTANCE_MM = estimate_distance(face_width_px)  
                 print(f"[DEBUG] Estimated Distance: {SCREEN_DISTANCE_MM:.2f} mm")
             
                 #  Debugging output
-                #  CHECK IF USER IS TOO FAR
+                #  check if user is too far
                 if SCREEN_DISTANCE_MM > MAX_DISTANCE_MM:
                     print("[WARNING] Too far from the screen! Pausing tracking...")
 
-                    #  Turn screen red
-                    red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
-                    frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
+                    # tunr screen red if too far
+                    # Full red frame
+                    red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8) 
+                    # Blend with transparency
+                    frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  
         
-                    # Show Warning Text
+                    # Warning to user
                     cv2.putText(frame, "Too Far! Move Closer", (150, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
 
-                    #  Pause timer if not already paused
+                    # Pause timer if not already paused
                     if last_pause_start is None:
-                        last_pause_start = time.time()  #  Set pause start time once
+                        # Set pause start time once
+                        last_pause_start = time.time()  
                 else:
-            #  Resume timer if user moves closer
+                    #  Resume timer if user moves closer
                     if last_pause_start is not None:
-                        paused_time += time.time() - last_pause_start  #  Accumulate paused time
-                        last_pause_start = None  #  Reset pause tracker
+                        # Accumulate paused time
+                        paused_time += time.time() - last_pause_start
+                        #  Reset pause tracker
+                        last_pause_start = None 
 
         else:
-            #  If no face detected, treat it like the user is too far
+            #  If no face detected...
             print("[WARNING] No face detected! Pausing tracking...")
 
-            #  Turn screen red
+            # Turn screen red
             red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  
             frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  
 
-            #  Show Warning Text
+            # Show Warning Text
             cv2.putText(frame, "No Face Detected! Please Step Closer", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
 
             #  Pause timer if not already paused
             if last_pause_start is None:
                 last_pause_start = time.time()
             
-            #SCREEN_DISTANCE_MM = 600  # Default to 60 cm if face is not detected
+            
         
-        # FIX: Initialize fixation text BEFORE checking for faces
+        # Initialize fixation text BEFORE checking for faces
         fixation_text = "No Fixation"
-        fixation_color = (0, 0, 255)  # Red (No Fixation)
+        # Red (No Fixation)
+        fixation_color = (0, 0, 255)  
         fixation_duration = 0
         blink_text = "Eyes Open"
         blink_color = (0, 255, 0)
         saccade_text = "No Saccade"
-        saccade_color = (255, 255, 255)  # White (No Saccade)
+        # White (No Saccade)
+        saccade_color = (255, 255, 255)  
         
-        # Update moving shape position (continuous motion)
-        absolute_time_elapsed = time.time() - start_time  # Independent of pause tracking
-        shape_x = int(320 + 150 * np.sin(absolute_time_elapsed * 2))  # Moves left-right
-        shape_y = int(240 + 50 * np.cos(absolute_time_elapsed * 2))  # Moves slightly up/down
+        # Update moving shape position 
+        # Independent of pause tracking
+        absolute_time_elapsed = time.time() - start_time
+        # Moves left-right  
+        shape_x = int(320 + 150 * np.sin(absolute_time_elapsed * 2))
+        # Moves slightly up/down
+        shape_y = int(240 + 50 * np.cos(absolute_time_elapsed * 2)) 
 
-        # Draw the moving shape (yellow circle)
+        # Draw the moving shape - yellow circle
         cv2.circle(frame, (shape_x, shape_y), shape_radius, (0, 255, 255), -1)
-
-        speed_mm_sec = None  # Default speed to None
+        # Default speed to None
+        speed_mm_sec = None  
 
         if faces:
-            face = faces[0]  # Use the first detected face
+            # Use the first detected face
+            face = faces[0]  
             if is_head_centered(face):
                 cv2.putText(frame, "Head Position: OK", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-                # Process gaze tracking when head is properly positioned
+                # gaze tracking occurs
                 gaze.refresh(frame)
                 cv2.waitKey(1)
                 
-                 #  BLINK DETECTION
+                 # blinking
                 if gaze.pupil_left_coords() is None and gaze.pupil_right_coords() is None:
                     blink_text = "Blink Detected"
-                    blink_color = (0, 0, 255)  # Red when blinking
+                    # Red when blinking
+                    blink_color = (0, 0, 255)  
 
                     if not eyes_closed:
                         blink_count += 1
                         eyes_closed = True
-                        blink_start_time = time.time()  #  Store blink start time
+                        # Store blink start time
+                        blink_start_time = time.time()  
                 else:
                     if eyes_closed:
-                        blink_duration = (time.time() - blink_start_time) * 1000  #  Calculate blink duration in ms
+                        # Calculate blink duration in ms
+                        blink_duration = (time.time() - blink_start_time) * 1000  
                         blink_durations.append(blink_duration)
                     eyes_closed = False
                 
-                
-
                 if pupils_located():
                     left_pupil = gaze.pupil_left_coords()
                     right_pupil = gaze.pupil_right_coords()
@@ -330,49 +333,54 @@ def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
                         timestamp = datetime.now().timestamp() * 1000
                         #  Ensure prev_timestamp is defined
                         if prev_timestamp is not None:
-                            time_diff = (timestamp - prev_timestamp) / 1000  # Convert ms to sec
+                            # Convert ms to sec
+                            time_diff = (timestamp - prev_timestamp) / 1000  
                         else:
-                            time_diff = 0  # First frame, no time difference
+                            # First frame, no time difference
+                            time_diff = 0  
 
                         curr_x = (left_pupil[0] + right_pupil[0]) / 2
                         curr_y = (left_pupil[1] + right_pupil[1]) / 2
 
-                        speed_px_sec, speed_mm_sec, speed_deg_sec = 0, 0, 0  
-                        # SPEED CALCULATION
+                        speed_px_sec, speed_mm_sec, speed_deg_sec = 0, 0, 0
+                          
+                        # calulate speed
                         if prev_x is not None and prev_y is not None:
                             speed_px_sec, speed_mm_sec, speed_deg_sec, time_diff = calculate_speed(
                                 (prev_x, prev_y), (curr_x, curr_y), prev_timestamp, timestamp
                             )
                             
-                            #  Print Debugging Info for Speed
+                            # Prining in terminal if needs debugguing
                             print(f"[DEBUG] Speed: {speed_deg_sec:.2f} deg/sec | Threshold: {SACCADE_VELOCITY_THRESHOLD} deg/sec")
 
-                            #  Saccade Detection Based on Speed & Duration
+                            # saccades detecting
                             if speed_deg_sec > SACCADE_VELOCITY_THRESHOLD and time_diff > (SACCADE_MIN_DURATION / 1000):
-                                print("[DEBUG] Saccade Detected!")  #  Print confirmation for debugging
+                                # Print debug
+                                print("[DEBUG] Saccade Detected!")  
 
-                             #  DETECT SACCADE IF SPEED > THRESHOLD
-                           # if speed_deg_sec > 30:  # Adjust threshold if needed
+                                # Detect saccade if speed>saccade
+                                # if speed_deg_sec > 30:  
                                 if not saccade_detected:
                                     saccade_detected = True
                                     saccade_start_time = time.time()
-                                    saccade_count += 1  #  INCREMENT SACCADE COUNT
+                                    # Increment saccades
+                                    saccade_count += 1  
                                     saccade_text = "Saccade Detected"
-                                    saccade_color = (255, 0, 0)  # Blue (Saccade Detected)
+                                    # Blue (Saccade Detected)
+                                    saccade_color = (255, 0, 0)  
                             else:
                                 if saccade_detected:
                                     saccade_duration = (time.time() - saccade_start_time) * 1000
                                     saccade_durations.append(saccade_duration)
-                                    saccade_detected = False  # RESET SACCADE STATE
+                                    saccade_detected = False  
 
 
-                            
-                            
                             if speed_mm_sec is not None and speed_mm_sec > 0:
                                 # Resume timer if it was paused
                                 if last_pause_start is not None:
                                     paused_time += time.time() - last_pause_start
-                                    last_pause_start = None  # Reset pause tracker
+                                    # Reset pause tracker 
+                                    last_pause_start = None  
                                     print("[DEBUG] Resuming timer - Movement detected.")
 
                                 log_data(log_file, [
@@ -395,13 +403,14 @@ def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
                         
                         if fixation_detected:
                             fixation_text = f"Fixation Detected ({fixation_duration:.2f}s)"
-                            fixation_color = (0, 255, 0)  # Green (Fixation detected)
+                            # Green (Fixation detected)
+                            fixation_color = (0, 255, 0)  
                             
-                            
-                        avg_blink_duration = np.mean(blink_durations) if blink_durations else 0  # Calculate avg blink duration   
+                        # Calculate avg blink duration      
+                        avg_blink_duration = np.mean(blink_durations) if blink_durations else 0   
                         avg_saccade_duration = np.mean(saccade_durations) if saccade_durations else 0  
                         
-                        # csv
+                        # csv log
                         log_data(log_file, [
                             datetime.now(), *left_pupil, *right_pupil,
                             speed_px_sec, speed_mm_sec, speed_deg_sec, fixation_detected, fixation_pos[0] if fixation_detected else None,
@@ -423,37 +432,41 @@ def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
                 cv2.putText(frame, blink_text, (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.7, blink_color, 2)
                 cv2.putText(frame, saccade_text, (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, saccade_color, 2)
 
-                #  **Speed Display on UI**
+                # speed shows on UI
                 if speed_mm_sec is not None and speed_mm_sec > 0:
                     cv2.putText(frame, f"Speed: {speed_mm_sec:.2f} mm/sec", (50, 100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
                 else:
                     cv2.putText(frame, "Speed: N/A", (50, 100),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)  # Red if speed is missing
+                                # Red if speed is missing
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)  
 
             else:
                 # Start pause timer if head is not centered
                 if last_pause_start is None:
                     last_pause_start = time.time()
 
-                # TURN SCREEN RED IF HEAD IS OUT OF POSITION
-                red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
-                frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
+                # screen is red if head not in oval
+                # Full red frame
+                red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8) 
+                # Blend with transparency
+                frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  
                 cv2.putText(frame, "Adjust Head Position!", (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
 
         else:
             # No face detected: Pause the timer and turn screen red
             if last_pause_start is None:
                 last_pause_start = time.time()
-
-            red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)  # Full red frame
-            frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  # Blend with transparency
+            # Full red frame
+            red_overlay = np.full_like(frame, (0, 0, 255), dtype=np.uint8)
+            # Blend with transparency
+            frame = cv2.addWeighted(frame, 0.3, red_overlay, 0.7, 0)  
             cv2.putText(frame, "No Face Detected!", (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
 
         # Draw original oval safe zone
         cv2.ellipse(frame, (320, 240), (120, 150), 0, 0, 360, (0, 255, 0), 2)
 
-        #  **Fixed Timer Display Update**
+        # timer display
         if last_pause_start is not None:
             # Timer is paused, stop updating elapsed_time
             remaining_time = max(0, tracking_duration - (time.time() - start_time - paused_time - (time.time() - last_pause_start)))
@@ -500,9 +513,7 @@ def track_eye_activity(patient_name, tracking_duration=10, frame_callback=None):
 
 
 # deterministic algorithm
-def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_fixations=20, min_blinks=10): #min_saccades=5):
-
-    
+def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_fixations=20, min_blinks=10): 
 
     csvs = sorted(
         f for f in os.listdir(data_folder)
@@ -514,6 +525,7 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
         return "Not enough data for deterministic prediction."
 
     speeds, fixations, blink_frequencies, blink_durations = [], [], [], []
+    
     #saccade_counts, saccade_durations = [], []
     total_data_points, total_fixations, total_blinks, total_saccades = 0, 0, 0, 0
 
@@ -521,16 +533,18 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
         df = pd.read_csv(os.path.join(data_folder, file))
 
 
-        # Add this check to avoid crashing!
+        # Add check of logs to avoid crash
         required_cols = ['Speed_mm_per_sec', 'Fixation_Detected', 'Blink_Count', 'Blink_Duration']
         if not all(col in df.columns for col in required_cols):
             print(f"[WARNING] Skipping file {file} because missing important columns.")
-            continue  # Skip bad file
+            # Skip bad file
+            continue  
         
         valid_speeds = df["Speed_mm_per_sec"].dropna().tolist()
         valid_fixations = df["Fixation_Detected"].dropna().sum()
         valid_blink_freqs = df["Blink_Count"].dropna().tolist()
         valid_blink_durations = df["Blink_Duration"].dropna().tolist()
+        # saccades hashed out as not used in prediction, only logged
         #valid_saccade_counts = df["Saccade_Count"].dropna().tolist()
         #valid_saccade_durations = df["Saccade_Duration"].dropna().tolist()
 
@@ -547,7 +561,8 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
         #total_saccades += len(valid_saccade_counts)
 
     # Check if enough data collected
-    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7: # or total_saccades #< min_saccades * 7:
+    # # or total_saccades #< min_saccades * 7:
+    if total_data_points < min_data_points * 7 or total_fixations < min_fixations * 7 or total_blinks < min_blinks * 7: 
         print(f"Not enough data collected for {patient_name}.")
         return "Not enough data for deterministic prediction."
 
@@ -559,7 +574,7 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
     #avg_saccade_count = np.mean(saccade_counts)
     #avg_saccade_duration = np.mean(saccade_durations)
 
-    # --- Check Each Feature Individually ---
+    # check feature
     healthy_features = 0
     total_features = 4
 
@@ -612,14 +627,8 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
     return prediction
 
 
-
-
-
-    
 def plot_weekly_speed_trend(patient_name, data_folder, week_number):
-    
-    
-        
+     
     csvs = sorted(
         f for f in os.listdir(data_folder)
         if f.lower().endswith(".csv")
@@ -635,7 +644,7 @@ def plot_weekly_speed_trend(patient_name, data_folder, week_number):
     day_nums, avg_speeds, avg_fixations, avg_blinks, avg_blink_durs = [], [], [], [], []
     for idx, fn in enumerate(csvs[-7:], start=1):
         df = pd.read_csv(os.path.join(data_folder, fn))
-        # … your checks here …
+        # check
         day_nums.append(idx)
         avg_speeds.append(df["Speed_mm_per_sec"].mean())
         avg_fixations.append(df["Fixation_Detected"].sum())
@@ -668,9 +677,6 @@ def plot_weekly_speed_trend(patient_name, data_folder, week_number):
     print(f"[INFO] Saved week {week_number} graphs into {data_folder}")
 
 
-
-
-
 def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, data_folder):
     pdf = FPDF()
     pdf.add_page()
@@ -697,7 +703,7 @@ def generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_
     pdf.multi_cell(0, 10, ai_prediction)
     pdf.ln(5)
 
-    # Save the file
+    # Save the file in path
     report_path = os.path.join(data_folder, f"{patient_name}_weekly_report_Week{week_number}.pdf")
     pdf.output(report_path)
 
@@ -880,7 +886,7 @@ if __name__ == "__main__":
         choice = input("Enter your choice (1/2/3): ").strip()
 
         if choice == "1":
-            #  RUN NEW TEST
+            # Run test
             patient_name = input("Enter patient name (or type 'list' to see existing folders): ").strip()
 
             if patient_name.lower() == "list":
@@ -900,12 +906,12 @@ if __name__ == "__main__":
 
                 track_eye_activity(patient_name, tracking_duration=10)
 
-                #  AFTER 7 CSVs
+                #  After 7 csv files - a week, create prediction
                 if len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) >= 7:
                     deterministic_prediction = check_weekly_prediction(patient_name)
                     plot_weekly_speed_trend(patient_name)
 
-                    #  AI Prediction
+                    # AI Prediction - unfinished prototype
                     all_data = []
                     for file in sorted(os.listdir(patient_folder)):
                         if file.endswith(".csv"):
@@ -921,7 +927,7 @@ if __name__ == "__main__":
 
                     if all_data:
                         combined_df = pd.concat(all_data, ignore_index=True)
-                        # 🛠️ Select only the 10 important features (no saccades)
+                        # not taking in saccades
                         selected_features = [
                             'Left_Pupil_X', 'Left_Pupil_Y', 'Right_Pupil_X', 'Right_Pupil_Y',
                             'Speed_px_per_sec', 'Speed_mm_per_sec', 'Speed_deg_per_sec',
@@ -937,7 +943,7 @@ if __name__ == "__main__":
                         ai_prediction = "IMPAIRED" if predicted_class == 0 else "HEALTHY"
 
 
-                    #  Generate PDF report
+                    # Generate PDF report
                     week_number = len([f for f in os.listdir(patient_folder) if f.endswith(".csv")]) // 7
                     if deterministic_prediction is not None and ai_prediction is not None:
                         generate_pdf_report(patient_name, week_number, deterministic_prediction, ai_prediction, patient_folder)
@@ -949,7 +955,7 @@ if __name__ == "__main__":
                 print("Error: Patient name cannot be empty.")
 
         elif choice == "2":
-            # IMPORT CSV csvs/PATH
+            # Import csvs
             folder_to_import = input("Enter path to folder containing CSV csvs: ").strip()
             target_patient_name = input("Enter target patient name: ").strip()
 
