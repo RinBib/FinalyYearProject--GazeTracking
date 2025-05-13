@@ -578,7 +578,7 @@ class ImportPage(BasePage):
         tb.Button(
             self,
             text="View Imported Data",
-            bootstyle="info-outline",
+            bootstyle="dark",
             width=20,
             command=self._goto_imported_tab
         ).pack(pady=(10,0))
