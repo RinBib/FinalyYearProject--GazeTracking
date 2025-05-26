@@ -14,5 +14,17 @@
   "evietest": {
     "password": "$argon2id$v=19$m=65536,t=3,p=4$0pDhj6zOwwTv1aDvtRYCpQ$73mKWk9qpNPn5lLnjRZSuTuSnI4Jr8CF6YnWVqD0r/c",
     "name": "evietest"
+  },
+  "adlansafi12335@gmail.com": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$NZq3DfqLAy2OGNKyaQtiMQ$zkUONXnC0PGYQyp2YbysbWiLdzFTcF28W0nAYpc+4vw",
+    "name": "Armal"
+  },
+  "bear": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$nHFi8/WhQdODIaawjYPlwg$hKEOYj37diPVf8UzHSQJ9j0Y1CLSVOsk22RTB8qHW6g",
+    "name": "bear"
+  },
+  "fish@email.co.uk": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$4CjUOkfGqwBzW5gGC9gchA$ORXyG3nVDxwuvSVK07W/I9EgbIsKiL9kR3IeVq662j4",
+    "name": "fish"
   }
 }

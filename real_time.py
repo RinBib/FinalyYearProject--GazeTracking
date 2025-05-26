@@ -27,8 +27,6 @@ scaler = joblib.load('scaler.pkl')
 # Ensures python can find gaze_tracking
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-
-
 # Initialize GazeTracking
 gaze = GazeTracking()
 # face detection
@@ -615,7 +613,7 @@ def check_weekly_prediction(patient_name, data_folder, min_data_points=30, min_f
     #else:
         #print("Saccade Count: Abnormal ")
 
-    # ===== Majority Voting =====
+    # Majority Voting 
     print(f"\nHealthy Features: {healthy_features}/{total_features}")
 
     if healthy_features >= 2:
@@ -750,7 +748,7 @@ def generate_monthly_report(patient_name, data_folder):
         "Possible Attention Deficit / High Cognitive Load": 1,
         "Possible Neurological Disorder (Check Medical Attention)": 0
     }
-    # **This** is the key: do .map on the Series, not on row
+    
     df["Score"] = df["Prediction"].map(label_to_score)
 
     first_half = df["Score"].iloc[:2].mean()
@@ -872,8 +870,6 @@ def import_existing_data_and_generate_report(patient_name, session_folder):
     df_root = pd.read_csv(root_summary)
     if len(df_root) >= 4:
         generate_monthly_report(patient_name, root_folder)
-
-
 
 
 if __name__ == "__main__":
