@@ -81,7 +81,7 @@ class TestPage(BasePage):
 
     # running test now via track_eye_activity
     def _run_full_test(self):
-        patient = self.controller.current_user_name or self.controller.current_user_email or "UnknownUser"
+        patient = self.controller.current_user_name or self.controller.current_user_email 
         folder = os.path.join("deterministic_model_test", patient)
         os.makedirs(folder, exist_ok=True)
 

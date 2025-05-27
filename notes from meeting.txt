@@ -30,7 +30,7 @@ add scrollbars for view data page - user test request                           
 FOR DEMO:
 gant chart                                                                                           DONE
 user test - evie                                                                                     DONE                           
-user test - armal                                                                                            
-presentation
+user test - armal                                                                                    DONE        
+presentation                                                                                         DONE
 update github                                                                                        DONE
 checks                                                                                               DONE

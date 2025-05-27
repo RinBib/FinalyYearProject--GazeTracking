@@ -26,5 +26,17 @@
   "fish@email.co.uk": {
     "password": "$argon2id$v=19$m=65536,t=3,p=4$4CjUOkfGqwBzW5gGC9gchA$ORXyG3nVDxwuvSVK07W/I9EgbIsKiL9kR3IeVq662j4",
     "name": "fish"
+  },
+  "mew": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$Jl0nvdNwDRDlEIp+eKVJzg$bwazqhUwEQKm38NglwZBjExiFrJaPGV1kfn007jq4nU",
+    "name": "mew"
+  },
+  "lion@email.co.uk": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$bCkYCk05auOztA5etzLH8A$hd9BdwhFBVCr3/pr8feen1wqk2mMT9SoAiWO5If95eM",
+    "name": "lion"
+  },
+  "car@email.co.uk": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$lN6oZesGjqcZVh1RTVQa1w$fksXDM2b+vK2+Gnfp2sRjwpD21/WlX84F+ro77ejpJ4",
+    "name": "car"
   }
 }

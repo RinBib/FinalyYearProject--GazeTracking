@@ -197,7 +197,7 @@ class LoginPage(tb.Frame):
             self.controller.user_password_var.set(self.pw_var.get())  
 
             # Set folder name in terms of user name and email
-            self.controller.user_data_folder = os.path.join("deterministic_model_test", email)  
+            self.controller.user_data_folder = os.path.join("deterministic_model_test", name)  
             self.controller.show_frame("HomePage")  # Go to the home page after login
         else:
             self.msg_var.set("Invalid email or password.")
